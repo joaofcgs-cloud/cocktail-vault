@@ -34,3 +34,18 @@ export function marginColor(m: number): string {
   if (m >= 70) return "var(--orange)";
   return "var(--red)";
 }
+
+// pour cost % thresholds (lower is better)
+export function pourCostColor(p: number): string {
+  if (p <= 18) return "var(--green)";
+  if (p <= 22) return "var(--orange)";
+  if (p <= 28) return "var(--orange)";
+  return "var(--red)";
+}
+
+export function pourCostLabel(p: number): string {
+  if (p <= 18) return "Excellent";
+  if (p <= 22) return "Good";
+  if (p <= 28) return "Watch";
+  return "Too high";
+}
