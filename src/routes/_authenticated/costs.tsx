@@ -110,6 +110,69 @@ function CostsPage() {
   );
   const listed = costs.filter((c) => category === "all" || c.category === category);
 
+  const MONTH_NAMES = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  const yearOptions = useMemo(() => {
+    const set = new Set<number>([now.getFullYear()]);
+    payments.forEach((p) => set.add(p.year));
+    costs.length; // ensure recompute when costs load
+    return [...set].sort((a, b) => b - a);
+  }, [payments, now]);
+
+  const costById = useMemo(
+    () => Object.fromEntries(costs.map((c) => [c.id, c])),
+    [costs],
+  );
+
+  const bySupplier = useMemo(() => {
+    const periodPay = new Map(
+      payments
+        .filter((p) => p.month === selMonth && p.year === selYear)
+        .map((p) => [p.service_cost_id, p]),
+    );
+    const map = new Map<
+      string,
+      {
+        expected: number;
+        paid: number;
+        items: { name: string; category: string; expected: number; paid: number; status: string }[];
+      }
+    >();
+    for (const c of costs.filter((x) => x.active)) {
+      const supplier = c.vendor || "Other";
+      const pay = periodPay.get(c.id);
+      const expected =
+        c.frequency === "annual"
+          ? c.amount / 12
+          : c.frequency === "quarterly"
+            ? c.amount / 3
+            : c.amount;
+      const g = map.get(supplier) ?? { expected: 0, paid: 0, items: [] };
+      g.expected += expected;
+      g.paid += pay?.amount_paid ?? 0;
+      g.items.push({
+        name: c.name,
+        category: c.category,
+        expected,
+        paid: pay?.amount_paid ?? 0,
+        status: pay?.status ?? "pending",
+      });
+      map.set(supplier, g);
+    }
+    return [...map.entries()]
+      .map(([supplier, g]) => ({
+        supplier,
+        ...g,
+        items: g.items.sort((a, b) => b.expected - a.expected),
+      }))
+      .sort((a, b) => b.expected - a.expected);
+  }, [costs, payments, selMonth, selYear]);
+
+  const periodExpected = bySupplier.reduce((s, g) => s + g.expected, 0);
+  const periodPaid = bySupplier.reduce((s, g) => s + g.paid, 0);
+
   const upcoming = [...costs]
     .filter((c) => c.active && payByCost[c.id]?.status !== "paid")
     .map((c) => ({ cost: c, daysUntil: c.due_day - today }))
