@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppNotification } from "@/lib/notifications";
 import { useAuth } from "@/lib/auth";
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 
 const db = supabase as any;
 
@@ -27,6 +27,7 @@ function timeAgo(iso: string): string {
 export function NotificationBell() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const channelId = useId();
 
   const { data: items = [] } = useQuery({
     queryKey: ["notifications"],
@@ -46,7 +47,7 @@ export function NotificationBell() {
   useEffect(() => {
     if (!user?.id) return;
     const channel = supabase
-      .channel("notifications-realtime")
+      .channel(`notifications-realtime-${channelId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "notifications" },
@@ -56,7 +57,7 @@ export function NotificationBell() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, qc]);
+  }, [user?.id, qc, channelId]);
 
   const unread = items.filter((n) => !n.read).length;
 
