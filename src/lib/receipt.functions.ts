@@ -3,7 +3,12 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const Input = z.object({
-  imageDataUrl: z.string().min(1).max(15_000_000),
+  // Image or PDF as a data URL (data:<mime>;base64,...)
+  fileDataUrl: z.string().min(1).max(25_000_000).optional(),
+  mimeType: z.string().optional(),
+  filename: z.string().optional(),
+  // Extracted plain-text content (spreadsheets, CSV, text files)
+  textContent: z.string().max(2_000_000).optional(),
 });
 
 export interface ParsedReceipt {
@@ -19,6 +24,32 @@ export const scanReceipt = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<ParsedReceipt> => {
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) throw new Error("AI is not configured.");
+
+    const instruction =
+      'Extract from this invoice/receipt: vendor, date (YYYY-MM-DD), line items with product, qty, unit price, total. Return JSON exactly: {"vendor":"","date":"","items":[{"product":"","qty":0,"unit_price":0,"total":0}],"grand_total":0}';
+
+    const userContent: unknown[] = [{ type: "text", text: instruction }];
+    if (data.textContent && data.textContent.trim()) {
+      userContent.push({
+        type: "text",
+        text: `Here is the invoice content:\n\n${data.textContent}`,
+      });
+    } else if (data.fileDataUrl) {
+      const mime = data.mimeType ?? "";
+      if (mime.startsWith("image/")) {
+        userContent.push({ type: "image_url", image_url: { url: data.fileDataUrl } });
+      } else {
+        userContent.push({
+          type: "file",
+          file: {
+            filename: data.filename || "invoice.pdf",
+            file_data: data.fileDataUrl,
+          },
+        });
+      }
+    } else {
+      throw new Error("No file content provided.");
+    }
 
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -36,13 +67,7 @@ export const scanReceipt = createServerFn({ method: "POST" })
           },
           {
             role: "user",
-            content: [
-              {
-                type: "text",
-                text: 'Extract from this receipt: vendor, date (YYYY-MM-DD), line items with product, qty, unit price, total. Return JSON exactly: {"vendor":"","date":"","items":[{"product":"","qty":0,"unit_price":0,"total":0}],"grand_total":0}',
-              },
-              { type: "image_url", image_url: { url: data.imageDataUrl } },
-            ],
+            content: userContent,
           },
         ],
       }),
