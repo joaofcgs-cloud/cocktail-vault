@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Calculator, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
+import { NotificationBell } from "@/components/NotificationBell";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -70,12 +71,13 @@ function Shell() {
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-teal/15 text-teal">
             <Martini className="h-5 w-5" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-black leading-tight">
               Imprensa Bar
             </p>
             <p className="text-xs text-muted-foreground">Command Center</p>
           </div>
+          <NotificationBell />
         </div>
         <nav className="flex flex-1 flex-col gap-1">
           {nav.map((item) => {
@@ -123,13 +125,16 @@ function Shell() {
           </div>
           <span className="text-sm font-black">Bar Command</span>
         </div>
-        <button
-          onClick={signOut}
-          aria-label="Sign out"
-          className="grid h-10 w-10 place-items-center rounded-lg text-muted-foreground"
-        >
-          <LogOut className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <button
+            onClick={signOut}
+            aria-label="Sign out"
+            className="grid h-10 w-10 place-items-center rounded-lg text-muted-foreground"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
+        </div>
       </header>
 
       {/* Main content */}

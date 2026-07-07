@@ -33,6 +33,19 @@ import {
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { scanReceipt } from "@/lib/receipt.functions";
+import {
+  createStockNotification,
+  type StockChange,
+} from "@/lib/notifications";
+import type { InventoryStatus } from "@/lib/db";
+
+function computeStatus(stock: number, par: number): InventoryStatus {
+  if (stock <= 0) return "OUT";
+  const ratio = par > 0 ? stock / par : 1;
+  if (ratio < 0.5) return "LOW";
+  if (ratio < 1) return "OK";
+  return "GOOD";
+}
 
 export const Route = createFileRoute("/_authenticated/invoices")({
   head: () => ({ meta: [{ title: "Invoices — Bar Command Center" }] }),
@@ -117,19 +130,24 @@ function InvoicesPage() {
         if (upErr) throw upErr;
         receipt_url = path;
       }
-      const { error } = await db.from("invoices").insert({
-        vendor: vendor.trim(),
-        date,
-        total: parseFloat(total) || 0,
-        items: itemsToText(rows) || null,
-        receipt_url,
-        created_by: user?.id,
-      });
+      const { data: inserted, error } = await db
+        .from("invoices")
+        .insert({
+          vendor: vendor.trim(),
+          date,
+          total: parseFloat(total) || 0,
+          items: itemsToText(rows) || null,
+          receipt_url,
+          created_by: user?.id,
+        })
+        .select("id")
+        .single();
       if (error) throw error;
 
       // Auto-update stock for confirmed, matched line items
       const stockRows = rows.filter((r) => r.addStock && r.inventoryId && r.qty > 0);
       let stockUpdates = 0;
+      const changes: StockChange[] = [];
       for (const r of stockRows) {
         const inv = inventory.find((i) => i.id === r.inventoryId);
         if (!inv) continue;
@@ -142,6 +160,25 @@ function InvoicesPage() {
           .eq("id", r.inventoryId);
         if (upErr) throw upErr;
         stockUpdates++;
+        changes.push({
+          name: inv.name,
+          qty: Number(r.qty),
+          newStock,
+          status: computeStatus(newStock, Number(inv.par_level)),
+        });
+      }
+
+      // Fire in-app stock update notification on every confirmed invoice
+      if (changes.length && user?.id) {
+        await createStockNotification({
+          userId: user.id,
+          vendor: vendor.trim(),
+          date,
+          total: parseFloat(total) || 0,
+          changes,
+          invoiceId: inserted?.id ?? null,
+        });
+        qc.invalidateQueries({ queryKey: ["notifications"] });
       }
 
       toast.success(
