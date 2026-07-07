@@ -336,6 +336,50 @@ export type Database = {
           },
         ]
       }
+      payroll_invoices: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          month: number
+          net_amount: number
+          staff_id: string | null
+          uploaded_by: string | null
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          id?: string
+          month: number
+          net_amount?: number
+          staff_id?: string | null
+          uploaded_by?: string | null
+          year: number
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          month?: number
+          net_amount?: number
+          staff_id?: string | null
+          uploaded_by?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_invoices_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payroll_records: {
         Row: {
           base_pay: number

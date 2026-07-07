@@ -117,5 +117,17 @@ export interface ServiceCostPayment {
   created_at: string;
 }
 
+export interface PayrollInvoice {
+  id: string;
+  staff_id: string | null;
+  month: number;
+  year: number;
+  file_name: string;
+  file_path: string;
+  net_amount: number;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const db = supabase as any;
