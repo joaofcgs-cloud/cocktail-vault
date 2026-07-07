@@ -121,11 +121,6 @@ function CostsPage() {
     return [...set].sort((a, b) => b - a);
   }, [payments, now]);
 
-  const costById = useMemo(
-    () => Object.fromEntries(costs.map((c) => [c.id, c])),
-    [costs],
-  );
-
   const bySupplier = useMemo(() => {
     const periodPay = new Map(
       payments
