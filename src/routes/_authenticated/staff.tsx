@@ -379,6 +379,127 @@ function StaffPage() {
           </div>
         </Card>
       )}
+
+      {tab === "Salary Invoices" && (
+        <div className="space-y-4">
+          <Card className="border-border bg-card p-4 md:p-5">
+            <h2 className="mb-1 text-sm font-bold uppercase tracking-wide">
+              Upload Salary Invoice
+            </h2>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Accepts PDF or image (JPG/PNG) files.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Employee
+                </label>
+                <select
+                  value={uploadStaff}
+                  onChange={(e) => setUploadStaff(e.target.value)}
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                >
+                  <option value="">All / General</option>
+                  {staff.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Month
+                </label>
+                <select
+                  value={upMonth}
+                  onChange={(e) => setUpMonth(Number(e.target.value))}
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>
+                      {new Date(2000, m - 1).toLocaleString("en", { month: "long" })}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Year
+                </label>
+                <input
+                  type="number"
+                  value={upYear}
+                  onChange={(e) => setUpYear(Number(e.target.value))}
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                />
+              </div>
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/pdf,image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleUpload(f);
+              }}
+            />
+            <Button
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+              className="mt-4 h-11 gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              {busy ? "Uploading…" : "Upload PDF / JPG"}
+            </Button>
+          </Card>
+
+          <Card className="border-border bg-card p-0">
+            <div className="border-b border-border px-4 py-3">
+              <h2 className="text-sm font-bold uppercase tracking-wide">
+                Uploaded Invoices ({invoices.length})
+              </h2>
+            </div>
+            <ul className="divide-y divide-border/60">
+              {invoices.map((inv) => (
+                <li key={inv.id} className="flex items-center gap-3 px-4 py-3">
+                  <FileText className="h-5 w-5 shrink-0 text-teal" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{inv.file_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {byId[inv.staff_id ?? ""]?.name ?? "General"} ·{" "}
+                      {new Date(inv.year, inv.month - 1).toLocaleString("en", {
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => openInvoice(inv.file_path)}
+                    aria-label="Open"
+                    className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-secondary"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => deleteInvoice(inv)}
+                    aria-label="Delete"
+                    className="grid h-9 w-9 place-items-center rounded-lg text-red hover:bg-secondary"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+              {invoices.length === 0 && (
+                <li className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  No salary invoices uploaded yet.
+                </li>
+              )}
+            </ul>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
