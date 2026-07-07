@@ -109,6 +109,7 @@
   --orange: oklch(0.78 0.16 60);
   --green: oklch(0.76 0.19 155);
   --purple: oklch(0.72 0.14 285);
+  --pink: oklch(0.74 0.14 5);
 
   --chart-1: var(--teal);
   --chart-2: var(--green);
