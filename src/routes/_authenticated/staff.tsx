@@ -1,13 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { db, type Staff, type PayrollRecord, type PayrollInvoice } from "@/lib/db";
+import { scanPayroll } from "@/lib/payroll.functions";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { eur, num } from "@/lib/format";
-import { Download, Lock, Upload, FileText, Trash2, ExternalLink } from "lucide-react";
+import { Download, Lock, Upload, FileText, Trash2, ExternalLink, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/staff")({
