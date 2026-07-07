@@ -16,9 +16,9 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedVarianceRouteImport } from './routes/_authenticated/variance'
 import { Route as AuthenticatedStockRouteImport } from './routes/_authenticated/stock'
 import { Route as AuthenticatedStaffRouteImport } from './routes/_authenticated/staff'
+import { Route as AuthenticatedSalesRouteImport } from './routes/_authenticated/sales'
 import { Route as AuthenticatedInvoicesRouteImport } from './routes/_authenticated/invoices'
 import { Route as AuthenticatedCostsRouteImport } from './routes/_authenticated/costs'
-import { Route as AuthenticatedCocktailsRouteImport } from './routes/_authenticated/cocktails'
 import { Route as AuthenticatedCalculatorsRouteImport } from './routes/_authenticated/calculators'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 
@@ -56,6 +56,11 @@ const AuthenticatedStaffRoute = AuthenticatedStaffRouteImport.update({
   path: '/staff',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSalesRoute = AuthenticatedSalesRouteImport.update({
+  id: '/sales',
+  path: '/sales',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedInvoicesRoute = AuthenticatedInvoicesRouteImport.update({
   id: '/invoices',
   path: '/invoices',
@@ -64,11 +69,6 @@ const AuthenticatedInvoicesRoute = AuthenticatedInvoicesRouteImport.update({
 const AuthenticatedCostsRoute = AuthenticatedCostsRouteImport.update({
   id: '/costs',
   path: '/costs',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedCocktailsRoute = AuthenticatedCocktailsRouteImport.update({
-  id: '/cocktails',
-  path: '/cocktails',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCalculatorsRoute =
@@ -89,9 +89,9 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/calculators': typeof AuthenticatedCalculatorsRoute
-  '/cocktails': typeof AuthenticatedCocktailsRoute
   '/costs': typeof AuthenticatedCostsRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
+  '/sales': typeof AuthenticatedSalesRoute
   '/staff': typeof AuthenticatedStaffRoute
   '/stock': typeof AuthenticatedStockRoute
   '/variance': typeof AuthenticatedVarianceRoute
@@ -101,9 +101,9 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/calculators': typeof AuthenticatedCalculatorsRoute
-  '/cocktails': typeof AuthenticatedCocktailsRoute
   '/costs': typeof AuthenticatedCostsRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
+  '/sales': typeof AuthenticatedSalesRoute
   '/staff': typeof AuthenticatedStaffRoute
   '/stock': typeof AuthenticatedStockRoute
   '/variance': typeof AuthenticatedVarianceRoute
@@ -116,9 +116,9 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/calculators': typeof AuthenticatedCalculatorsRoute
-  '/_authenticated/cocktails': typeof AuthenticatedCocktailsRoute
   '/_authenticated/costs': typeof AuthenticatedCostsRoute
   '/_authenticated/invoices': typeof AuthenticatedInvoicesRoute
+  '/_authenticated/sales': typeof AuthenticatedSalesRoute
   '/_authenticated/staff': typeof AuthenticatedStaffRoute
   '/_authenticated/stock': typeof AuthenticatedStockRoute
   '/_authenticated/variance': typeof AuthenticatedVarianceRoute
@@ -132,9 +132,9 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/analytics'
     | '/calculators'
-    | '/cocktails'
     | '/costs'
     | '/invoices'
+    | '/sales'
     | '/staff'
     | '/stock'
     | '/variance'
@@ -144,9 +144,9 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/analytics'
     | '/calculators'
-    | '/cocktails'
     | '/costs'
     | '/invoices'
+    | '/sales'
     | '/staff'
     | '/stock'
     | '/variance'
@@ -158,9 +158,9 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/_authenticated/analytics'
     | '/_authenticated/calculators'
-    | '/_authenticated/cocktails'
     | '/_authenticated/costs'
     | '/_authenticated/invoices'
+    | '/_authenticated/sales'
     | '/_authenticated/staff'
     | '/_authenticated/stock'
     | '/_authenticated/variance'
@@ -224,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedStaffRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/sales': {
+      id: '/_authenticated/sales'
+      path: '/sales'
+      fullPath: '/sales'
+      preLoaderRoute: typeof AuthenticatedSalesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/invoices': {
       id: '/_authenticated/invoices'
       path: '/invoices'
@@ -236,13 +243,6 @@ declare module '@tanstack/react-router' {
       path: '/costs'
       fullPath: '/costs'
       preLoaderRoute: typeof AuthenticatedCostsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/cocktails': {
-      id: '/_authenticated/cocktails'
-      path: '/cocktails'
-      fullPath: '/cocktails'
-      preLoaderRoute: typeof AuthenticatedCocktailsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/calculators': {
@@ -265,9 +265,9 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedCalculatorsRoute: typeof AuthenticatedCalculatorsRoute
-  AuthenticatedCocktailsRoute: typeof AuthenticatedCocktailsRoute
   AuthenticatedCostsRoute: typeof AuthenticatedCostsRoute
   AuthenticatedInvoicesRoute: typeof AuthenticatedInvoicesRoute
+  AuthenticatedSalesRoute: typeof AuthenticatedSalesRoute
   AuthenticatedStaffRoute: typeof AuthenticatedStaffRoute
   AuthenticatedStockRoute: typeof AuthenticatedStockRoute
   AuthenticatedVarianceRoute: typeof AuthenticatedVarianceRoute
@@ -277,9 +277,9 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedCalculatorsRoute: AuthenticatedCalculatorsRoute,
-  AuthenticatedCocktailsRoute: AuthenticatedCocktailsRoute,
   AuthenticatedCostsRoute: AuthenticatedCostsRoute,
   AuthenticatedInvoicesRoute: AuthenticatedInvoicesRoute,
+  AuthenticatedSalesRoute: AuthenticatedSalesRoute,
   AuthenticatedStaffRoute: AuthenticatedStaffRoute,
   AuthenticatedStockRoute: AuthenticatedStockRoute,
   AuthenticatedVarianceRoute: AuthenticatedVarianceRoute,

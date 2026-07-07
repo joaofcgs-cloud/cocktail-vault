@@ -33,7 +33,7 @@ const CAT_COLOR: Record<string, string> = {
   Compliance: "var(--orange)",
 };
 
-const TABS = ["Dashboard", "Costs List", "Payments", "Alerts"] as const;
+const TABS = ["Dashboard", "By Supplier", "Costs List", "Payments", "Alerts"] as const;
 type Tab = (typeof TABS)[number];
 
 const STATUS_BADGE: Record<string, string> = {
@@ -48,6 +48,9 @@ function CostsPage() {
   const [tab, setTab] = useState<Tab>("Dashboard");
   const [category, setCategory] = useState("all");
   const today = new Date().getDate();
+  const now = new Date();
+  const [selMonth, setSelMonth] = useState(now.getMonth() + 1);
+  const [selYear, setSelYear] = useState(now.getFullYear());
 
   const { data: costs = [] } = useQuery({
     queryKey: ["service_costs"],
@@ -106,6 +109,64 @@ function CostsPage() {
     [costs],
   );
   const listed = costs.filter((c) => category === "all" || c.category === category);
+
+  const MONTH_NAMES = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  const yearOptions = useMemo(() => {
+    const set = new Set<number>([now.getFullYear()]);
+    payments.forEach((p) => set.add(p.year));
+    costs.length; // ensure recompute when costs load
+    return [...set].sort((a, b) => b - a);
+  }, [payments, now]);
+
+  const bySupplier = useMemo(() => {
+    const periodPay = new Map(
+      payments
+        .filter((p) => p.month === selMonth && p.year === selYear)
+        .map((p) => [p.service_cost_id, p]),
+    );
+    const map = new Map<
+      string,
+      {
+        expected: number;
+        paid: number;
+        items: { name: string; category: string; expected: number; paid: number; status: string }[];
+      }
+    >();
+    for (const c of costs.filter((x) => x.active)) {
+      const supplier = c.vendor || "Other";
+      const pay = periodPay.get(c.id);
+      const expected =
+        c.frequency === "annual"
+          ? c.amount / 12
+          : c.frequency === "quarterly"
+            ? c.amount / 3
+            : c.amount;
+      const g = map.get(supplier) ?? { expected: 0, paid: 0, items: [] };
+      g.expected += expected;
+      g.paid += pay?.amount_paid ?? 0;
+      g.items.push({
+        name: c.name,
+        category: c.category,
+        expected,
+        paid: pay?.amount_paid ?? 0,
+        status: pay?.status ?? "pending",
+      });
+      map.set(supplier, g);
+    }
+    return [...map.entries()]
+      .map(([supplier, g]) => ({
+        supplier,
+        ...g,
+        items: g.items.sort((a, b) => b.expected - a.expected),
+      }))
+      .sort((a, b) => b.expected - a.expected);
+  }, [costs, payments, selMonth, selYear]);
+
+  const periodExpected = bySupplier.reduce((s, g) => s + g.expected, 0);
+  const periodPaid = bySupplier.reduce((s, g) => s + g.paid, 0);
 
   const upcoming = [...costs]
     .filter((c) => c.active && payByCost[c.id]?.status !== "paid")
@@ -256,6 +317,90 @@ function CostsPage() {
               ))}
             </div>
           </Card>
+        </div>
+      )}
+
+      {tab === "By Supplier" && (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <Select value={String(selMonth)} onValueChange={(v) => setSelMonth(Number(v))}>
+              <SelectTrigger className="h-11 w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MONTH_NAMES.map((m, i) => (
+                  <SelectItem key={m} value={String(i + 1)}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={String(selYear)} onValueChange={(v) => setSelYear(Number(v))}>
+              <SelectTrigger className="h-11 w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {yearOptions.map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <MiniKpi label="Expected" value={eur(periodExpected)} tone="var(--teal)" />
+            <MiniKpi label="Paid" value={eur(periodPaid)} tone="var(--green)" />
+            <MiniKpi
+              label="Outstanding"
+              value={eur(Math.max(periodExpected - periodPaid, 0))}
+              tone="var(--orange)"
+            />
+          </div>
+
+          {bySupplier.map((g) => (
+            <Card key={g.supplier} className="border-border bg-card p-4 md:p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-black tracking-tight">{g.supplier}</h2>
+                  <p className="text-xs text-muted-foreground">{g.items.length} services</p>
+                </div>
+                <div className="text-right text-sm">
+                  <p className="font-black text-teal">{eur(g.expected)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {eur(g.paid)} paid
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {g.items.map((it) => (
+                  <div
+                    key={it.name}
+                    className="flex items-center justify-between gap-3 border-t border-border/60 pt-2 text-sm first:border-0 first:pt-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{it.name}</p>
+                      <p className="text-xs text-muted-foreground">{it.category}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="tabular-nums font-semibold">{eur(it.expected)}</span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-bold ${STATUS_BADGE[it.status] ?? STATUS_BADGE.pending}`}
+                      >
+                        {it.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ))}
+          {bySupplier.length === 0 && (
+            <Card className="border-border bg-card p-8 text-center text-muted-foreground">
+              No cost data for {MONTH_NAMES[selMonth - 1]} {selYear} yet.
+            </Card>
+          )}
         </div>
       )}
 
