@@ -313,11 +313,10 @@ function InvoicesPage() {
             ) : (
               <ScanLine className="h-4 w-4" />
             )}
-            {scanning ? "Scanning…" : "Scan Receipt"}
+            {scanning ? "Reading…" : "Scan / Upload Invoice"}
             <input
               type="file"
-              accept="image/*"
-              capture="environment"
+              accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,.ods,.tsv,.txt,.md,.json,.xml,text/*,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               className="hidden"
               disabled={scanning}
               onChange={(e) => {
