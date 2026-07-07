@@ -217,11 +217,55 @@ function InvoicesPage() {
     });
   }
 
+  function fileToText(f: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(f);
+    });
+  }
+
+  async function spreadsheetToText(f: File): Promise<string> {
+    const { read, utils } = await import("xlsx");
+    const buf = await f.arrayBuffer();
+    const wb = read(buf, { type: "array" });
+    return wb.SheetNames.map((name) => {
+      const csv = utils.sheet_to_csv(wb.Sheets[name]);
+      return `# Sheet: ${name}\n${csv}`;
+    }).join("\n\n");
+  }
+
+  async function buildScanPayload(f: File) {
+    const name = f.name.toLowerCase();
+    const mime = f.type;
+    const isSpreadsheet =
+      /\.(xlsx|xls|csv|ods|tsv)$/.test(name) ||
+      mime.includes("spreadsheet") ||
+      mime.includes("excel") ||
+      mime === "text/csv";
+    const isText =
+      mime.startsWith("text/") ||
+      /\.(txt|md|csv|tsv|json|xml)$/.test(name);
+
+    if (isSpreadsheet) {
+      if (/\.(xlsx|xls|ods)$/.test(name) || mime.includes("spreadsheet") || mime.includes("excel")) {
+        return { textContent: await spreadsheetToText(f) };
+      }
+      return { textContent: await fileToText(f) };
+    }
+    if (isText) {
+      return { textContent: await fileToText(f) };
+    }
+    // Images and PDFs → send as data URL
+    return { fileDataUrl: await fileToDataUrl(f), mimeType: mime, filename: f.name };
+  }
+
   async function handleScan(f: File) {
     setScanning(true);
     try {
-      const dataUrl = await fileToDataUrl(f);
-      const parsed = await runScan({ data: { imageDataUrl: dataUrl } });
+      const payload = await buildScanPayload(f);
+      const parsed = await runScan({ data: payload });
       const candidates = inventory.map((i) => ({ id: i.id, name: i.name }));
       const matched: LineRow[] = parsed.items.map((it) => {
         const m = bestMatch(it.product ?? "", candidates);
@@ -241,7 +285,7 @@ function InvoicesPage() {
       setRows(matched);
       setFile(f);
       setOpen(true);
-      toast.success("Receipt scanned — review matches and save.");
+      toast.success("File read — review matches and save.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Scan failed");
     } finally {
