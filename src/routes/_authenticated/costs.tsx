@@ -48,6 +48,9 @@ function CostsPage() {
   const [tab, setTab] = useState<Tab>("Dashboard");
   const [category, setCategory] = useState("all");
   const today = new Date().getDate();
+  const now = new Date();
+  const [selMonth, setSelMonth] = useState(now.getMonth() + 1);
+  const [selYear, setSelYear] = useState(now.getFullYear());
 
   const { data: costs = [] } = useQuery({
     queryKey: ["service_costs"],
