@@ -546,6 +546,16 @@ function StaffPage() {
               <Upload className="h-4 w-4" />
               {busy ? "Uploading…" : "Upload PDF / JPG"}
             </Button>
+            <label className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={autoRead}
+                onChange={(e) => setAutoRead(e.target.checked)}
+                className="h-4 w-4 accent-teal"
+              />
+              <Sparkles className="h-4 w-4 text-teal" />
+              Auto-read with AI and fill staff &amp; payroll
+            </label>
           </Card>
 
           <Card className="border-border bg-card p-0">
