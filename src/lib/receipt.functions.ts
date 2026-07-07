@@ -26,7 +26,16 @@ export const scanReceipt = createServerFn({ method: "POST" })
     if (!apiKey) throw new Error("AI is not configured.");
 
     const instruction =
-      'Extract from this invoice/receipt: vendor, date (YYYY-MM-DD), line items with product, qty, unit price, total. Return JSON exactly: {"vendor":"","date":"","items":[{"product":"","qty":0,"unit_price":0,"total":0}],"grand_total":0}';
+      [
+        "Extract structured data from this invoice/receipt.",
+        "vendor: the SUPPLIER / seller who ISSUED the invoice (the company whose name and tax number head the document, near the logo or 'Fatura'), NOT the customer/buyer/recipient (do not use fields labelled Cliente, Adquirente, Local de descarga, or the ship-to company).",
+        "date: the issue date (Data Emissão) in YYYY-MM-DD.",
+        "For each purchased line item: product name, qty (quantity), unit_price (net unit price), total (line total).",
+        "Skip items whose quantity is 0 (they are catalogue/price-list rows, not purchases).",
+        "Numbers may use a comma as the decimal separator and a dot/space as thousands separator (European format) — normalise them to plain decimals with a dot.",
+        "grand_total: the final payable TOTAL of the invoice (the 'TOTAL' including tax), as a number.",
+        'Return ONLY this JSON: {"vendor":"","date":"","items":[{"product":"","qty":0,"unit_price":0,"total":0}],"grand_total":0}',
+      ].join("\n");
 
     const userContent: unknown[] = [{ type: "text", text: instruction }];
     if (data.textContent && data.textContent.trim()) {
