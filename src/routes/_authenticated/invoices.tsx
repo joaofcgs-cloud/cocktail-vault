@@ -130,19 +130,24 @@ function InvoicesPage() {
         if (upErr) throw upErr;
         receipt_url = path;
       }
-      const { error } = await db.from("invoices").insert({
-        vendor: vendor.trim(),
-        date,
-        total: parseFloat(total) || 0,
-        items: itemsToText(rows) || null,
-        receipt_url,
-        created_by: user?.id,
-      });
+      const { data: inserted, error } = await db
+        .from("invoices")
+        .insert({
+          vendor: vendor.trim(),
+          date,
+          total: parseFloat(total) || 0,
+          items: itemsToText(rows) || null,
+          receipt_url,
+          created_by: user?.id,
+        })
+        .select("id")
+        .single();
       if (error) throw error;
 
       // Auto-update stock for confirmed, matched line items
       const stockRows = rows.filter((r) => r.addStock && r.inventoryId && r.qty > 0);
       let stockUpdates = 0;
+      const changes: StockChange[] = [];
       for (const r of stockRows) {
         const inv = inventory.find((i) => i.id === r.inventoryId);
         if (!inv) continue;
@@ -155,6 +160,25 @@ function InvoicesPage() {
           .eq("id", r.inventoryId);
         if (upErr) throw upErr;
         stockUpdates++;
+        changes.push({
+          name: inv.name,
+          qty: Number(r.qty),
+          newStock,
+          status: computeStatus(newStock, Number(inv.par_level)),
+        });
+      }
+
+      // Fire in-app stock update notification on every confirmed invoice
+      if (changes.length && user?.id) {
+        await createStockNotification({
+          userId: user.id,
+          vendor: vendor.trim(),
+          date,
+          total: parseFloat(total) || 0,
+          changes,
+          invoiceId: inserted?.id ?? null,
+        });
+        qc.invalidateQueries({ queryKey: ["notifications"] });
       }
 
       toast.success(
