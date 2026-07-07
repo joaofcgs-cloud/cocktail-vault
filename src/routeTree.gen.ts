@@ -15,7 +15,9 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedVarianceRouteImport } from './routes/_authenticated/variance'
 import { Route as AuthenticatedStockRouteImport } from './routes/_authenticated/stock'
+import { Route as AuthenticatedStaffRouteImport } from './routes/_authenticated/staff'
 import { Route as AuthenticatedInvoicesRouteImport } from './routes/_authenticated/invoices'
+import { Route as AuthenticatedCostsRouteImport } from './routes/_authenticated/costs'
 import { Route as AuthenticatedCocktailsRouteImport } from './routes/_authenticated/cocktails'
 import { Route as AuthenticatedCalculatorsRouteImport } from './routes/_authenticated/calculators'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
@@ -49,9 +51,19 @@ const AuthenticatedStockRoute = AuthenticatedStockRouteImport.update({
   path: '/stock',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedStaffRoute = AuthenticatedStaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedInvoicesRoute = AuthenticatedInvoicesRouteImport.update({
   id: '/invoices',
   path: '/invoices',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCostsRoute = AuthenticatedCostsRouteImport.update({
+  id: '/costs',
+  path: '/costs',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCocktailsRoute = AuthenticatedCocktailsRouteImport.update({
@@ -78,7 +90,9 @@ export interface FileRoutesByFullPath {
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/calculators': typeof AuthenticatedCalculatorsRoute
   '/cocktails': typeof AuthenticatedCocktailsRoute
+  '/costs': typeof AuthenticatedCostsRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
+  '/staff': typeof AuthenticatedStaffRoute
   '/stock': typeof AuthenticatedStockRoute
   '/variance': typeof AuthenticatedVarianceRoute
 }
@@ -88,7 +102,9 @@ export interface FileRoutesByTo {
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/calculators': typeof AuthenticatedCalculatorsRoute
   '/cocktails': typeof AuthenticatedCocktailsRoute
+  '/costs': typeof AuthenticatedCostsRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
+  '/staff': typeof AuthenticatedStaffRoute
   '/stock': typeof AuthenticatedStockRoute
   '/variance': typeof AuthenticatedVarianceRoute
   '/': typeof AuthenticatedIndexRoute
@@ -101,7 +117,9 @@ export interface FileRoutesById {
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/calculators': typeof AuthenticatedCalculatorsRoute
   '/_authenticated/cocktails': typeof AuthenticatedCocktailsRoute
+  '/_authenticated/costs': typeof AuthenticatedCostsRoute
   '/_authenticated/invoices': typeof AuthenticatedInvoicesRoute
+  '/_authenticated/staff': typeof AuthenticatedStaffRoute
   '/_authenticated/stock': typeof AuthenticatedStockRoute
   '/_authenticated/variance': typeof AuthenticatedVarianceRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
@@ -115,7 +133,9 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/calculators'
     | '/cocktails'
+    | '/costs'
     | '/invoices'
+    | '/staff'
     | '/stock'
     | '/variance'
   fileRoutesByTo: FileRoutesByTo
@@ -125,7 +145,9 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/calculators'
     | '/cocktails'
+    | '/costs'
     | '/invoices'
+    | '/staff'
     | '/stock'
     | '/variance'
     | '/'
@@ -137,7 +159,9 @@ export interface FileRouteTypes {
     | '/_authenticated/analytics'
     | '/_authenticated/calculators'
     | '/_authenticated/cocktails'
+    | '/_authenticated/costs'
     | '/_authenticated/invoices'
+    | '/_authenticated/staff'
     | '/_authenticated/stock'
     | '/_authenticated/variance'
     | '/_authenticated/'
@@ -193,11 +217,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedStockRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/staff': {
+      id: '/_authenticated/staff'
+      path: '/staff'
+      fullPath: '/staff'
+      preLoaderRoute: typeof AuthenticatedStaffRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/invoices': {
       id: '/_authenticated/invoices'
       path: '/invoices'
       fullPath: '/invoices'
       preLoaderRoute: typeof AuthenticatedInvoicesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/costs': {
+      id: '/_authenticated/costs'
+      path: '/costs'
+      fullPath: '/costs'
+      preLoaderRoute: typeof AuthenticatedCostsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/cocktails': {
@@ -228,7 +266,9 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedCalculatorsRoute: typeof AuthenticatedCalculatorsRoute
   AuthenticatedCocktailsRoute: typeof AuthenticatedCocktailsRoute
+  AuthenticatedCostsRoute: typeof AuthenticatedCostsRoute
   AuthenticatedInvoicesRoute: typeof AuthenticatedInvoicesRoute
+  AuthenticatedStaffRoute: typeof AuthenticatedStaffRoute
   AuthenticatedStockRoute: typeof AuthenticatedStockRoute
   AuthenticatedVarianceRoute: typeof AuthenticatedVarianceRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
@@ -238,7 +278,9 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedCalculatorsRoute: AuthenticatedCalculatorsRoute,
   AuthenticatedCocktailsRoute: AuthenticatedCocktailsRoute,
+  AuthenticatedCostsRoute: AuthenticatedCostsRoute,
   AuthenticatedInvoicesRoute: AuthenticatedInvoicesRoute,
+  AuthenticatedStaffRoute: AuthenticatedStaffRoute,
   AuthenticatedStockRoute: AuthenticatedStockRoute,
   AuthenticatedVarianceRoute: AuthenticatedVarianceRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
@@ -255,13 +297,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

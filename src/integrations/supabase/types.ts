@@ -292,6 +292,65 @@ export type Database = {
         }
         Relationships: []
       }
+      payroll_records: {
+        Row: {
+          base_pay: number
+          created_at: string
+          days_worked: number
+          gross_pay: number
+          hours_worked: number
+          id: string
+          irs: number
+          meal_subsidy: number
+          month: number
+          net_pay: number
+          social_security: number
+          staff_id: string | null
+          tips: number
+          year: number
+        }
+        Insert: {
+          base_pay?: number
+          created_at?: string
+          days_worked?: number
+          gross_pay?: number
+          hours_worked?: number
+          id?: string
+          irs?: number
+          meal_subsidy?: number
+          month: number
+          net_pay?: number
+          social_security?: number
+          staff_id?: string | null
+          tips?: number
+          year: number
+        }
+        Update: {
+          base_pay?: number
+          created_at?: string
+          days_worked?: number
+          gross_pay?: number
+          hours_worked?: number
+          id?: string
+          irs?: number
+          meal_subsidy?: number
+          month?: number
+          net_pay?: number
+          social_security?: number
+          staff_id?: string | null
+          tips?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_records_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -340,6 +399,122 @@ export type Database = {
           parsed_data?: Json | null
           status?: string
           upload_date?: string | null
+        }
+        Relationships: []
+      }
+      service_cost_payments: {
+        Row: {
+          amount_paid: number
+          created_at: string
+          id: string
+          month: number
+          payment_date: string | null
+          receipt_url: string | null
+          service_cost_id: string | null
+          status: string
+          year: number
+        }
+        Insert: {
+          amount_paid?: number
+          created_at?: string
+          id?: string
+          month: number
+          payment_date?: string | null
+          receipt_url?: string | null
+          service_cost_id?: string | null
+          status?: string
+          year: number
+        }
+        Update: {
+          amount_paid?: number
+          created_at?: string
+          id?: string
+          month?: number
+          payment_date?: string | null
+          receipt_url?: string | null
+          service_cost_id?: string | null
+          status?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_cost_payments_service_cost_id_fkey"
+            columns: ["service_cost_id"]
+            isOneToOne: false
+            referencedRelation: "service_costs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_costs: {
+        Row: {
+          active: boolean
+          amount: number
+          auto_renew: boolean
+          category: string
+          created_at: string
+          due_day: number
+          frequency: string
+          id: string
+          name: string
+          vendor: string | null
+        }
+        Insert: {
+          active?: boolean
+          amount?: number
+          auto_renew?: boolean
+          category?: string
+          created_at?: string
+          due_day?: number
+          frequency?: string
+          id?: string
+          name: string
+          vendor?: string | null
+        }
+        Update: {
+          active?: boolean
+          amount?: number
+          auto_renew?: boolean
+          category?: string
+          created_at?: string
+          due_day?: number
+          frequency?: string
+          id?: string
+          name?: string
+          vendor?: string | null
+        }
+        Relationships: []
+      }
+      staff: {
+        Row: {
+          active: boolean
+          base_salary: number
+          created_at: string
+          hourly_rate: number
+          id: string
+          name: string
+          nif: string | null
+          role: string
+        }
+        Insert: {
+          active?: boolean
+          base_salary?: number
+          created_at?: string
+          hourly_rate?: number
+          id?: string
+          name: string
+          nif?: string | null
+          role?: string
+        }
+        Update: {
+          active?: boolean
+          base_salary?: number
+          created_at?: string
+          hourly_rate?: number
+          id?: string
+          name?: string
+          nif?: string | null
+          role?: string
         }
         Relationships: []
       }

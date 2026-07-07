@@ -1,6 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { db, type InventoryItem, type Cocktail } from "@/lib/db";
+import {
+  db,
+  type InventoryItem,
+  type Cocktail,
+  type PayrollRecord,
+  type ServiceCost,
+} from "@/lib/db";
+import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { eur, num, marginColor } from "@/lib/format";
 import {
@@ -11,6 +19,9 @@ import {
   Wallet,
   Boxes,
   Percent,
+  Users,
+  Receipt,
+  ChevronRight,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -71,6 +82,40 @@ function Kpi({
 function Overview() {
   const { data: inv = [] } = useInventory();
   const { data: cocktails = [] } = useCocktails();
+  const { isOwner } = useAuth();
+
+  const { data: payroll = [] } = useQuery({
+    queryKey: ["payroll_records"],
+    queryFn: async (): Promise<PayrollRecord[]> => {
+      const { data, error } = await db.from("payroll_records").select("*");
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOwner,
+  });
+  const { data: costs = [] } = useQuery({
+    queryKey: ["service_costs"],
+    queryFn: async (): Promise<ServiceCost[]> => {
+      const { data, error } = await db.from("service_costs").select("*");
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOwner,
+  });
+
+  const payrollTotal = payroll.reduce((s, p) => s + p.gross_pay, 0);
+  const fixedTotal = costs
+    .filter((c) => c.active)
+    .reduce(
+      (s, c) =>
+        s +
+        (c.frequency === "annual"
+          ? c.amount / 12
+          : c.frequency === "quarterly"
+            ? c.amount / 3
+            : c.amount),
+      0,
+    );
 
   const stockValue = inv.reduce(
     (s, i) => s + i.current_stock * i.unit_cost,
@@ -140,6 +185,44 @@ function Overview() {
           tone="var(--green)"
         />
       </div>
+
+      {/* Cost summary cards (owner only) */}
+      {isOwner && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Link to="/staff" className="block">
+            <Card className="flex items-center justify-between border-border bg-card p-4 transition-colors hover:border-teal/40">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-teal/15 text-teal">
+                  <Users className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Monthly Payroll
+                  </p>
+                  <p className="text-xl font-black text-teal">{eur(payrollTotal)}</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </Card>
+          </Link>
+          <Link to="/costs" className="block">
+            <Card className="flex items-center justify-between border-border bg-card p-4 transition-colors hover:border-orange/40">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-orange/15 text-orange">
+                  <Receipt className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Fixed Costs / mo
+                  </p>
+                  <p className="text-xl font-black text-orange">{eur(fixedTotal)}</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </Card>
+          </Link>
+        </div>
+      )}
 
       {/* Alerts */}
       <Card className="border-border bg-card p-4 md:p-5">
