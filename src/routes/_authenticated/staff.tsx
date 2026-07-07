@@ -1,13 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { db, type Staff, type PayrollRecord, type PayrollInvoice } from "@/lib/db";
+import { scanPayroll } from "@/lib/payroll.functions";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { eur, num } from "@/lib/format";
-import { Download, Lock, Upload, FileText, Trash2, ExternalLink } from "lucide-react";
+import { Download, Lock, Upload, FileText, Trash2, ExternalLink, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/staff")({
@@ -78,6 +80,93 @@ function StaffPage() {
   const [upMonth, setUpMonth] = useState(now.getMonth() + 1);
   const [upYear, setUpYear] = useState(now.getFullYear());
   const [busy, setBusy] = useState(false);
+  const [autoRead, setAutoRead] = useState(true);
+  const runScan = useServerFn(scanPayroll);
+
+  function fileToDataUrl(f: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(f);
+    });
+  }
+
+  async function importPayroll(file: File) {
+    const dataUrl = await fileToDataUrl(file);
+    const parsed = await runScan({
+      data: { fileDataUrl: dataUrl, mimeType: file.type, fileName: file.name },
+    });
+    if (!parsed.employees.length) {
+      toast.error("AI could not find any employees in this file.");
+      return;
+    }
+    let inserted = 0;
+    for (const e of parsed.employees) {
+      if (!e.name) continue;
+      // Find existing staff by NIF, else by name
+      let staffId: string | null = null;
+      const existing = staff.find(
+        (s) =>
+          (e.nif && s.nif === e.nif) ||
+          s.name.toLowerCase() === e.name.toLowerCase(),
+      );
+      if (existing) {
+        staffId = existing.id;
+        await db
+          .from("staff")
+          .update({
+            role: e.role || existing.role,
+            base_salary: e.base_salary || existing.base_salary,
+            hourly_rate: e.hourly_rate || existing.hourly_rate,
+            nif: e.nif || existing.nif,
+          })
+          .eq("id", existing.id);
+      } else {
+        const { data: newStaff } = await db
+          .from("staff")
+          .insert({
+            name: e.name,
+            nif: e.nif || null,
+            role: e.role || "—",
+            base_salary: e.base_salary,
+            hourly_rate: e.hourly_rate,
+            active: true,
+          })
+          .select("id")
+          .single();
+        staffId = newStaff?.id ?? null;
+      }
+      if (!staffId) continue;
+      // Replace any existing record for this staff/month/year
+      await db
+        .from("payroll_records")
+        .delete()
+        .eq("staff_id", staffId)
+        .eq("month", parsed.month)
+        .eq("year", parsed.year);
+      await db.from("payroll_records").insert({
+        staff_id: staffId,
+        month: parsed.month,
+        year: parsed.year,
+        base_pay: e.base_pay,
+        meal_subsidy: e.meal_subsidy,
+        tips: e.tips,
+        gross_pay: e.gross_pay,
+        irs: e.irs,
+        social_security: e.social_security,
+        net_pay: e.net_pay,
+        days_worked: e.days_worked,
+        hours_worked: e.hours_worked,
+      });
+      inserted++;
+    }
+    setUpMonth(parsed.month);
+    setUpYear(parsed.year);
+    toast.success(`AI imported ${inserted} payslip${inserted > 1 ? "s" : ""}.`);
+    qc.invalidateQueries({ queryKey: ["staff"] });
+    qc.invalidateQueries({ queryKey: ["payroll_records"] });
+  }
 
   async function handleUpload(file: File) {
     if (!user?.id) return;
@@ -106,6 +195,10 @@ function StaffPage() {
       if (error) throw error;
       toast.success("Salary invoice uploaded.");
       qc.invalidateQueries({ queryKey: ["payroll_invoices"] });
+      if (autoRead) {
+        toast.info("Reading payslip with AI…");
+        await importPayroll(file);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -453,6 +546,16 @@ function StaffPage() {
               <Upload className="h-4 w-4" />
               {busy ? "Uploading…" : "Upload PDF / JPG"}
             </Button>
+            <label className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={autoRead}
+                onChange={(e) => setAutoRead(e.target.checked)}
+                className="h-4 w-4 accent-teal"
+              />
+              <Sparkles className="h-4 w-4 text-teal" />
+              Auto-read with AI and fill staff &amp; payroll
+            </label>
           </Card>
 
           <Card className="border-border bg-card p-0">
