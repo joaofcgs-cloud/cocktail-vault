@@ -17,6 +17,7 @@ import { Route as AuthenticatedVarianceRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedStockRouteImport } from './routes/_authenticated/stock'
 import { Route as AuthenticatedStaffRouteImport } from './routes/_authenticated/staff'
 import { Route as AuthenticatedInvoicesRouteImport } from './routes/_authenticated/invoices'
+import { Route as AuthenticatedCostsRouteImport } from './routes/_authenticated/costs'
 import { Route as AuthenticatedCocktailsRouteImport } from './routes/_authenticated/cocktails'
 import { Route as AuthenticatedCalculatorsRouteImport } from './routes/_authenticated/calculators'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
@@ -60,6 +61,11 @@ const AuthenticatedInvoicesRoute = AuthenticatedInvoicesRouteImport.update({
   path: '/invoices',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCostsRoute = AuthenticatedCostsRouteImport.update({
+  id: '/costs',
+  path: '/costs',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedCocktailsRoute = AuthenticatedCocktailsRouteImport.update({
   id: '/cocktails',
   path: '/cocktails',
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/calculators': typeof AuthenticatedCalculatorsRoute
   '/cocktails': typeof AuthenticatedCocktailsRoute
+  '/costs': typeof AuthenticatedCostsRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
   '/staff': typeof AuthenticatedStaffRoute
   '/stock': typeof AuthenticatedStockRoute
@@ -95,6 +102,7 @@ export interface FileRoutesByTo {
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/calculators': typeof AuthenticatedCalculatorsRoute
   '/cocktails': typeof AuthenticatedCocktailsRoute
+  '/costs': typeof AuthenticatedCostsRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
   '/staff': typeof AuthenticatedStaffRoute
   '/stock': typeof AuthenticatedStockRoute
@@ -109,6 +117,7 @@ export interface FileRoutesById {
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/calculators': typeof AuthenticatedCalculatorsRoute
   '/_authenticated/cocktails': typeof AuthenticatedCocktailsRoute
+  '/_authenticated/costs': typeof AuthenticatedCostsRoute
   '/_authenticated/invoices': typeof AuthenticatedInvoicesRoute
   '/_authenticated/staff': typeof AuthenticatedStaffRoute
   '/_authenticated/stock': typeof AuthenticatedStockRoute
@@ -124,6 +133,7 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/calculators'
     | '/cocktails'
+    | '/costs'
     | '/invoices'
     | '/staff'
     | '/stock'
@@ -135,6 +145,7 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/calculators'
     | '/cocktails'
+    | '/costs'
     | '/invoices'
     | '/staff'
     | '/stock'
@@ -148,6 +159,7 @@ export interface FileRouteTypes {
     | '/_authenticated/analytics'
     | '/_authenticated/calculators'
     | '/_authenticated/cocktails'
+    | '/_authenticated/costs'
     | '/_authenticated/invoices'
     | '/_authenticated/staff'
     | '/_authenticated/stock'
@@ -219,6 +231,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInvoicesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/costs': {
+      id: '/_authenticated/costs'
+      path: '/costs'
+      fullPath: '/costs'
+      preLoaderRoute: typeof AuthenticatedCostsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/cocktails': {
       id: '/_authenticated/cocktails'
       path: '/cocktails'
@@ -247,6 +266,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedCalculatorsRoute: typeof AuthenticatedCalculatorsRoute
   AuthenticatedCocktailsRoute: typeof AuthenticatedCocktailsRoute
+  AuthenticatedCostsRoute: typeof AuthenticatedCostsRoute
   AuthenticatedInvoicesRoute: typeof AuthenticatedInvoicesRoute
   AuthenticatedStaffRoute: typeof AuthenticatedStaffRoute
   AuthenticatedStockRoute: typeof AuthenticatedStockRoute
@@ -258,6 +278,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedCalculatorsRoute: AuthenticatedCalculatorsRoute,
   AuthenticatedCocktailsRoute: AuthenticatedCocktailsRoute,
+  AuthenticatedCostsRoute: AuthenticatedCostsRoute,
   AuthenticatedInvoicesRoute: AuthenticatedInvoicesRoute,
   AuthenticatedStaffRoute: AuthenticatedStaffRoute,
   AuthenticatedStockRoute: AuthenticatedStockRoute,

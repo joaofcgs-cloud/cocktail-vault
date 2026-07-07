@@ -16,6 +16,8 @@ import {
   ReceiptText,
   Scale,
   LogOut,
+  Users,
+  Wallet,
 } from "lucide-react";
 import { Calculator, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
@@ -34,13 +36,15 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 const NAV = [
-  { to: "/", label: "Overview", icon: LayoutDashboard, exact: true },
-  { to: "/stock", label: "Stock", icon: Boxes, exact: false },
-  { to: "/cocktails", label: "Cocktails", icon: Martini, exact: false },
-  { to: "/invoices", label: "Invoices", icon: ReceiptText, exact: false },
-  { to: "/calculators", label: "Calc", icon: Calculator, exact: false },
-  { to: "/analytics", label: "Charts", icon: BarChart3, exact: false },
-  { to: "/variance", label: "Variance", icon: Scale, exact: false },
+  { to: "/", label: "Overview", icon: LayoutDashboard, exact: true, ownerOnly: false },
+  { to: "/stock", label: "Stock", icon: Boxes, exact: false, ownerOnly: false },
+  { to: "/cocktails", label: "Cocktails", icon: Martini, exact: false, ownerOnly: false },
+  { to: "/invoices", label: "Invoices", icon: ReceiptText, exact: false, ownerOnly: false },
+  { to: "/calculators", label: "Calc", icon: Calculator, exact: false, ownerOnly: false },
+  { to: "/analytics", label: "Charts", icon: BarChart3, exact: false, ownerOnly: true },
+  { to: "/variance", label: "Variance", icon: Scale, exact: false, ownerOnly: true },
+  { to: "/staff", label: "Staff", icon: Users, exact: false, ownerOnly: true },
+  { to: "/costs", label: "Costs", icon: Wallet, exact: false, ownerOnly: true },
 ] as const;
 
 function Shell() {
@@ -48,6 +52,7 @@ function Shell() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const nav = NAV.filter((item) => !item.ownerOnly || role === "owner");
 
   async function signOut() {
     await queryClient.cancelQueries();
@@ -73,7 +78,7 @@ function Shell() {
           </div>
         </div>
         <nav className="flex flex-1 flex-col gap-1">
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const active = item.exact
               ? pathname === item.to
               : pathname.startsWith(item.to);
@@ -134,7 +139,7 @@ function Shell() {
 
       {/* Mobile bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-30 flex overflow-x-auto border-t border-border bg-background/95 backdrop-blur md:hidden">
-        {NAV.map((item) => {
+        {nav.map((item) => {
           const active = item.exact
             ? pathname === item.to
             : pathname.startsWith(item.to);
