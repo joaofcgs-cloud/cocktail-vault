@@ -1,6 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { db, type InventoryItem, type Cocktail } from "@/lib/db";
+import {
+  db,
+  type InventoryItem,
+  type Cocktail,
+  type PayrollRecord,
+  type ServiceCost,
+} from "@/lib/db";
+import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { eur, num, marginColor } from "@/lib/format";
 import {
@@ -11,6 +19,9 @@ import {
   Wallet,
   Boxes,
   Percent,
+  Users,
+  Receipt,
+  ChevronRight,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -71,6 +82,40 @@ function Kpi({
 function Overview() {
   const { data: inv = [] } = useInventory();
   const { data: cocktails = [] } = useCocktails();
+  const { isOwner } = useAuth();
+
+  const { data: payroll = [] } = useQuery({
+    queryKey: ["payroll_records"],
+    queryFn: async (): Promise<PayrollRecord[]> => {
+      const { data, error } = await db.from("payroll_records").select("*");
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOwner,
+  });
+  const { data: costs = [] } = useQuery({
+    queryKey: ["service_costs"],
+    queryFn: async (): Promise<ServiceCost[]> => {
+      const { data, error } = await db.from("service_costs").select("*");
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOwner,
+  });
+
+  const payrollTotal = payroll.reduce((s, p) => s + p.gross_pay, 0);
+  const fixedTotal = costs
+    .filter((c) => c.active)
+    .reduce(
+      (s, c) =>
+        s +
+        (c.frequency === "annual"
+          ? c.amount / 12
+          : c.frequency === "quarterly"
+            ? c.amount / 3
+            : c.amount),
+      0,
+    );
 
   const stockValue = inv.reduce(
     (s, i) => s + i.current_stock * i.unit_cost,
