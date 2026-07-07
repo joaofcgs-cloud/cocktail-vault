@@ -17,6 +17,7 @@ import {
   Scale,
   LogOut,
 } from "lucide-react";
+import { Calculator, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -37,6 +38,8 @@ const NAV = [
   { to: "/stock", label: "Stock", icon: Boxes, exact: false },
   { to: "/cocktails", label: "Cocktails", icon: Martini, exact: false },
   { to: "/invoices", label: "Invoices", icon: ReceiptText, exact: false },
+  { to: "/calculators", label: "Calc", icon: Calculator, exact: false },
+  { to: "/analytics", label: "Charts", icon: BarChart3, exact: false },
   { to: "/variance", label: "Variance", icon: Scale, exact: false },
 ] as const;
 
