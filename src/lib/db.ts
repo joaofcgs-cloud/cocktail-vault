@@ -64,5 +64,58 @@ export interface BatchRecipe {
 
 export type AppRole = "owner" | "staff";
 
+export interface Staff {
+  id: string;
+  name: string;
+  nif: string | null;
+  role: string;
+  base_salary: number;
+  hourly_rate: number;
+  active: boolean;
+  created_at: string;
+}
+
+export interface PayrollRecord {
+  id: string;
+  staff_id: string | null;
+  month: number;
+  year: number;
+  base_pay: number;
+  meal_subsidy: number;
+  tips: number;
+  gross_pay: number;
+  irs: number;
+  social_security: number;
+  net_pay: number;
+  days_worked: number;
+  hours_worked: number;
+  created_at: string;
+}
+
+export interface ServiceCost {
+  id: string;
+  name: string;
+  category: string;
+  amount: number;
+  frequency: string;
+  due_day: number;
+  vendor: string | null;
+  auto_renew: boolean;
+  active: boolean;
+  created_at: string;
+}
+
+export interface ServiceCostPayment {
+  id: string;
+  service_cost_id: string | null;
+  month: number;
+  year: number;
+  amount_paid: number;
+  payment_date: string | null;
+  status: string;
+  receipt_url: string | null;
+  created_at: string;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const db = supabase as any;
