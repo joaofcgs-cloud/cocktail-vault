@@ -1,12 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { db, type Staff, type PayrollRecord } from "@/lib/db";
+import { useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { db, type Staff, type PayrollRecord, type PayrollInvoice } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { eur, num } from "@/lib/format";
-import { Download, Lock } from "lucide-react";
+import { Download, Lock, Upload, FileText, Trash2, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/staff")({
   head: () => ({ meta: [{ title: "Staff & Payroll — Bar Command Center" }] }),
@@ -21,12 +23,13 @@ const ROLE_BADGE: Record<string, string> = {
   "Trabalhador de limpeza": "bg-secondary text-muted-foreground",
 };
 
-const TABS = ["Staff List", "Payroll", "Monthly Costs", "Tips"] as const;
+const TABS = ["Staff List", "Payroll", "Monthly Costs", "Tips", "Salary Invoices"] as const;
 type Tab = (typeof TABS)[number];
 
 function StaffPage() {
-  const { isOwner } = useAuth();
+  const { isOwner, user } = useAuth();
   const [tab, setTab] = useState<Tab>("Staff List");
+  const qc = useQueryClient();
 
   const { data: staff = [] } = useQuery({
     queryKey: ["staff"],
@@ -51,10 +54,88 @@ function StaffPage() {
     enabled: isOwner,
   });
 
+  const { data: invoices = [] } = useQuery({
+    queryKey: ["payroll_invoices"],
+    queryFn: async (): Promise<PayrollInvoice[]> => {
+      const { data, error } = await db
+        .from("payroll_invoices")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOwner,
+  });
+
   const byId = useMemo(
     () => Object.fromEntries(staff.map((s) => [s.id, s])),
     [staff],
   );
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploadStaff, setUploadStaff] = useState<string>("");
+  const now = new Date();
+  const [upMonth, setUpMonth] = useState(now.getMonth() + 1);
+  const [upYear, setUpYear] = useState(now.getFullYear());
+  const [busy, setBusy] = useState(false);
+
+  async function handleUpload(file: File) {
+    if (!user?.id) return;
+    const okType =
+      file.type === "application/pdf" || file.type.startsWith("image/");
+    if (!okType) {
+      toast.error("Only PDF or image (JPG/PNG) files are allowed.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const safeName = file.name.replace(/[^\w.\-]/g, "_");
+      const path = `${user.id}/payroll/${upYear}-${String(upMonth).padStart(2, "0")}-${Date.now()}-${safeName}`;
+      const { error: upErr } = await supabase.storage
+        .from("receipts")
+        .upload(path, file);
+      if (upErr) throw upErr;
+      const { error } = await db.from("payroll_invoices").insert({
+        staff_id: uploadStaff || null,
+        month: upMonth,
+        year: upYear,
+        file_name: file.name,
+        file_path: path,
+        uploaded_by: user.id,
+      });
+      if (error) throw error;
+      toast.success("Salary invoice uploaded.");
+      qc.invalidateQueries({ queryKey: ["payroll_invoices"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function openInvoice(path: string) {
+    const { data, error } = await supabase.storage
+      .from("receipts")
+      .createSignedUrl(path, 60);
+    if (error || !data) {
+      toast.error("Could not open file.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank");
+  }
+
+  async function deleteInvoice(inv: PayrollInvoice) {
+    if (!confirm(`Delete "${inv.file_name}"?`)) return;
+    await supabase.storage.from("receipts").remove([inv.file_path]);
+    const { error } = await db.from("payroll_invoices").delete().eq("id", inv.id);
+    if (error) {
+      toast.error("Could not delete record.");
+      return;
+    }
+    toast.success("Deleted.");
+    qc.invalidateQueries({ queryKey: ["payroll_invoices"] });
+  }
 
   const totals = useMemo(() => {
     const gross = payroll.reduce((s, p) => s + p.gross_pay, 0);
