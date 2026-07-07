@@ -115,6 +115,10 @@ function CocktailsPage() {
                   <p className="font-bold text-green">{eur(profit)}</p>
                 </div>
               </div>
+              <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-xs">
+                <span className="text-muted-foreground">ABV</span>
+                <span className="font-bold text-purple">{num(c.abv_percent)}%</span>
+              </div>
             </Card>
           );
         })}
