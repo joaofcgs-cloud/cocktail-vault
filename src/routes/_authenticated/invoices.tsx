@@ -470,14 +470,14 @@ function InvoicesPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="receipt">Receipt photo (optional)</Label>
+                  <Label htmlFor="receipt">Attached file (optional)</Label>
                   <label className="flex h-11 cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 text-sm text-muted-foreground">
                     <ImageUp className="h-4 w-4" />
-                    {file ? file.name : "Upload receipt photo"}
+                    {file ? file.name : "Attach photo, PDF, Excel or text file"}
                     <input
                       id="receipt"
                       type="file"
-                      accept="image/*"
+                      accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,.ods,.tsv,.txt,.md,.json,.xml,text/*"
                       className="hidden"
                       onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                     />
