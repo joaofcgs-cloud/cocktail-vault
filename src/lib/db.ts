@@ -1,7 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// The generated Database type is empty until types regenerate, so we expose
-// domain row shapes and a loosely-typed client for queries.
 export type InventoryStatus = "OUT" | "LOW" | "OK" | "GOOD";
 
 export interface InventoryItem {
@@ -11,6 +9,10 @@ export interface InventoryItem {
   current_stock: number;
   par_level: number;
   unit_cost: number;
+  bottle_size_ml: number;
+  abv: number;
+  cost_per_ml: number;
+  pours_per_bottle: number;
   status: InventoryStatus;
   created_at: string;
 }
@@ -22,6 +24,9 @@ export interface Cocktail {
   price: number;
   est_cost: number;
   margin_percent: number;
+  abv_percent: number;
+  category: string | null;
+  total_volume_ml: number;
   created_at: string;
 }
 
@@ -36,13 +41,24 @@ export interface Invoice {
   created_at: string;
 }
 
-export interface SalesUpload {
+export interface DailySale {
   id: string;
-  upload_date: string | null;
-  file_name: string | null;
-  parsed_data: unknown;
-  status: string;
-  created_by: string | null;
+  date: string;
+  cocktail_id: string | null;
+  quantity_sold: number;
+  revenue: number;
+  cost: number;
+  profit: number;
+  created_at: string;
+}
+
+export interface BatchRecipe {
+  id: string;
+  name: string;
+  total_servings: number;
+  total_cost: number;
+  cost_per_serving: number;
+  instructions: string | null;
   created_at: string;
 }
 
