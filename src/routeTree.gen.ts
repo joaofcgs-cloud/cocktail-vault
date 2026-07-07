@@ -17,6 +17,8 @@ import { Route as AuthenticatedVarianceRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedStockRouteImport } from './routes/_authenticated/stock'
 import { Route as AuthenticatedInvoicesRouteImport } from './routes/_authenticated/invoices'
 import { Route as AuthenticatedCocktailsRouteImport } from './routes/_authenticated/cocktails'
+import { Route as AuthenticatedCalculatorsRouteImport } from './routes/_authenticated/calculators'
+import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -57,11 +59,24 @@ const AuthenticatedCocktailsRoute = AuthenticatedCocktailsRouteImport.update({
   path: '/cocktails',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCalculatorsRoute =
+  AuthenticatedCalculatorsRouteImport.update({
+    id: '/calculators',
+    path: '/calculators',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
+  '/calculators': typeof AuthenticatedCalculatorsRoute
   '/cocktails': typeof AuthenticatedCocktailsRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
   '/stock': typeof AuthenticatedStockRoute
@@ -70,6 +85,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
+  '/calculators': typeof AuthenticatedCalculatorsRoute
   '/cocktails': typeof AuthenticatedCocktailsRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
   '/stock': typeof AuthenticatedStockRoute
@@ -81,6 +98,8 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
+  '/_authenticated/calculators': typeof AuthenticatedCalculatorsRoute
   '/_authenticated/cocktails': typeof AuthenticatedCocktailsRoute
   '/_authenticated/invoices': typeof AuthenticatedInvoicesRoute
   '/_authenticated/stock': typeof AuthenticatedStockRoute
@@ -93,6 +112,8 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/sitemap.xml'
+    | '/analytics'
+    | '/calculators'
     | '/cocktails'
     | '/invoices'
     | '/stock'
@@ -101,6 +122,8 @@ export interface FileRouteTypes {
   to:
     | '/auth'
     | '/sitemap.xml'
+    | '/analytics'
+    | '/calculators'
     | '/cocktails'
     | '/invoices'
     | '/stock'
@@ -111,6 +134,8 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/sitemap.xml'
+    | '/_authenticated/analytics'
+    | '/_authenticated/calculators'
     | '/_authenticated/cocktails'
     | '/_authenticated/invoices'
     | '/_authenticated/stock'
@@ -182,10 +207,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCocktailsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/calculators': {
+      id: '/_authenticated/calculators'
+      path: '/calculators'
+      fullPath: '/calculators'
+      preLoaderRoute: typeof AuthenticatedCalculatorsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/analytics': {
+      id: '/_authenticated/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
+  AuthenticatedCalculatorsRoute: typeof AuthenticatedCalculatorsRoute
   AuthenticatedCocktailsRoute: typeof AuthenticatedCocktailsRoute
   AuthenticatedInvoicesRoute: typeof AuthenticatedInvoicesRoute
   AuthenticatedStockRoute: typeof AuthenticatedStockRoute
@@ -194,6 +235,8 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
+  AuthenticatedCalculatorsRoute: AuthenticatedCalculatorsRoute,
   AuthenticatedCocktailsRoute: AuthenticatedCocktailsRoute,
   AuthenticatedInvoicesRoute: AuthenticatedInvoicesRoute,
   AuthenticatedStockRoute: AuthenticatedStockRoute,
@@ -212,3 +255,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

@@ -18,8 +18,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { eur } from "@/lib/format";
-import { Plus, MessageSquare, ImageUp, Paperclip } from "lucide-react";
+import { Plus, MessageSquare, ImageUp, Paperclip, ScanLine, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { scanReceipt } from "@/lib/receipt.functions";
 
 export const Route = createFileRoute("/_authenticated/invoices")({
   head: () => ({ meta: [{ title: "Invoices — Bar Command Center" }] }),
@@ -36,6 +38,8 @@ function InvoicesPage() {
   const [items, setItems] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const runScan = useServerFn(scanReceipt);
 
   const { data: invoices = [] } = useQuery({
     queryKey: ["invoices"],
@@ -104,6 +108,38 @@ function InvoicesPage() {
     window.open(data.signedUrl, "_blank");
   }
 
+  function fileToDataUrl(f: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(f);
+    });
+  }
+
+  async function handleScan(f: File) {
+    setScanning(true);
+    try {
+      const dataUrl = await fileToDataUrl(f);
+      const parsed = await runScan({ data: { imageDataUrl: dataUrl } });
+      setVendor(parsed.vendor || "");
+      if (parsed.date) setDate(parsed.date);
+      setTotal(String(parsed.grand_total || ""));
+      setItems(
+        parsed.items
+          .map((it) => `${it.qty}× ${it.product} @ ${it.unit_price} = ${it.total}`)
+          .join("\n"),
+      );
+      setFile(f);
+      setOpen(true);
+      toast.success("Receipt scanned — review and save.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Scan failed");
+    } finally {
+      setScanning(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -115,10 +151,31 @@ function InvoicesPage() {
             {invoices.length} recorded
           </p>
         </div>
+        <div className="flex gap-2">
+        <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-md bg-teal px-4 text-sm font-semibold text-primary-foreground">
+          {scanning ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ScanLine className="h-4 w-4" />
+          )}
+          {scanning ? "Scanning…" : "Scan Receipt"}
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            disabled={scanning}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleScan(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="h-11 gap-2 font-semibold">
-              <Plus className="h-4 w-4" /> Add Invoice
+            <Button variant="outline" className="h-11 gap-2 font-semibold">
+              <Plus className="h-4 w-4" /> Add Manual
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
@@ -196,6 +253,7 @@ function InvoicesPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Staff instruction box */}

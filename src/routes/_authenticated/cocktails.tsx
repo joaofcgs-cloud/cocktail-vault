@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/cocktails")({
 });
 
 function CocktailsPage() {
-  const [sort, setSort] = useState<"margin" | "price">("margin");
+  const [sort, setSort] = useState<"margin" | "price" | "abv">("margin");
 
   const { data: cocktails = [] } = useQuery({
     queryKey: ["cocktails"],
@@ -32,7 +32,9 @@ function CocktailsPage() {
   const sorted = [...cocktails].sort((a, b) =>
     sort === "margin"
       ? b.margin_percent - a.margin_percent
-      : b.price - a.price,
+      : sort === "price"
+        ? b.price - a.price
+        : b.abv_percent - a.abv_percent,
   );
 
   return (
@@ -53,6 +55,7 @@ function CocktailsPage() {
           <SelectContent>
             <SelectItem value="margin">Sort by margin</SelectItem>
             <SelectItem value="price">Sort by price</SelectItem>
+            <SelectItem value="abv">Sort by ABV</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -111,6 +114,10 @@ function CocktailsPage() {
                   </p>
                   <p className="font-bold text-green">{eur(profit)}</p>
                 </div>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-xs">
+                <span className="text-muted-foreground">ABV</span>
+                <span className="font-bold text-purple">{num(c.abv_percent)}%</span>
               </div>
             </Card>
           );

@@ -17,6 +17,7 @@ import {
   Scale,
   LogOut,
 } from "lucide-react";
+import { Calculator, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -37,6 +38,8 @@ const NAV = [
   { to: "/stock", label: "Stock", icon: Boxes, exact: false },
   { to: "/cocktails", label: "Cocktails", icon: Martini, exact: false },
   { to: "/invoices", label: "Invoices", icon: ReceiptText, exact: false },
+  { to: "/calculators", label: "Calc", icon: Calculator, exact: false },
+  { to: "/analytics", label: "Charts", icon: BarChart3, exact: false },
   { to: "/variance", label: "Variance", icon: Scale, exact: false },
 ] as const;
 
@@ -130,7 +133,7 @@ function Shell() {
       </main>
 
       {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 border-t border-border bg-background/95 backdrop-blur md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 flex overflow-x-auto border-t border-border bg-background/95 backdrop-blur md:hidden">
         {NAV.map((item) => {
           const active = item.exact
             ? pathname === item.to
@@ -139,7 +142,7 @@ function Shell() {
             <Link
               key={item.to}
               to={item.to}
-              className={`flex h-16 flex-col items-center justify-center gap-1 text-[10px] font-semibold ${
+              className={`flex h-16 min-w-[3.6rem] flex-1 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold ${
                 active ? "text-teal" : "text-muted-foreground"
               }`}
             >

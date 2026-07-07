@@ -14,8 +14,130 @@ export type Database = {
   }
   public: {
     Tables: {
+      batch_ingredients: {
+        Row: {
+          amount_ml: number
+          batch_id: string
+          checked: boolean
+          created_at: string
+          id: string
+          inventory_id: string | null
+        }
+        Insert: {
+          amount_ml?: number
+          batch_id: string
+          checked?: boolean
+          created_at?: string
+          id?: string
+          inventory_id?: string | null
+        }
+        Update: {
+          amount_ml?: number
+          batch_id?: string
+          checked?: boolean
+          created_at?: string
+          id?: string
+          inventory_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batch_ingredients_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batch_recipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "batch_ingredients_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      batch_recipes: {
+        Row: {
+          cost_per_serving: number
+          created_at: string
+          created_by: string | null
+          id: string
+          instructions: string | null
+          name: string
+          total_cost: number
+          total_servings: number
+        }
+        Insert: {
+          cost_per_serving?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          instructions?: string | null
+          name: string
+          total_cost?: number
+          total_servings?: number
+        }
+        Update: {
+          cost_per_serving?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          instructions?: string | null
+          name?: string
+          total_cost?: number
+          total_servings?: number
+        }
+        Relationships: []
+      }
+      cocktail_ingredients: {
+        Row: {
+          amount_ml: number
+          cocktail_id: string
+          cost_per_ingredient: number
+          created_at: string
+          id: string
+          inventory_id: string | null
+          is_prep: boolean
+        }
+        Insert: {
+          amount_ml?: number
+          cocktail_id: string
+          cost_per_ingredient?: number
+          created_at?: string
+          id?: string
+          inventory_id?: string | null
+          is_prep?: boolean
+        }
+        Update: {
+          amount_ml?: number
+          cocktail_id?: string
+          cost_per_ingredient?: number
+          created_at?: string
+          id?: string
+          inventory_id?: string | null
+          is_prep?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cocktail_ingredients_cocktail_id_fkey"
+            columns: ["cocktail_id"]
+            isOneToOne: false
+            referencedRelation: "cocktails"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cocktail_ingredients_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cocktails: {
         Row: {
+          abv_percent: number
+          category: string | null
           created_at: string
           est_cost: number
           id: string
@@ -23,8 +145,11 @@ export type Database = {
           name: string
           price: number
           specs: string | null
+          total_volume_ml: number
         }
         Insert: {
+          abv_percent?: number
+          category?: string | null
           created_at?: string
           est_cost?: number
           id?: string
@@ -32,8 +157,11 @@ export type Database = {
           name: string
           price?: number
           specs?: string | null
+          total_volume_ml?: number
         }
         Update: {
+          abv_percent?: number
+          category?: string | null
           created_at?: string
           est_cost?: number
           id?: string
@@ -41,37 +169,91 @@ export type Database = {
           name?: string
           price?: number
           specs?: string | null
+          total_volume_ml?: number
         }
         Relationships: []
       }
+      daily_sales: {
+        Row: {
+          cocktail_id: string | null
+          cost: number
+          created_at: string
+          date: string
+          id: string
+          profit: number
+          quantity_sold: number
+          revenue: number
+        }
+        Insert: {
+          cocktail_id?: string | null
+          cost?: number
+          created_at?: string
+          date?: string
+          id?: string
+          profit?: number
+          quantity_sold?: number
+          revenue?: number
+        }
+        Update: {
+          cocktail_id?: string | null
+          cost?: number
+          created_at?: string
+          date?: string
+          id?: string
+          profit?: number
+          quantity_sold?: number
+          revenue?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_sales_cocktail_id_fkey"
+            columns: ["cocktail_id"]
+            isOneToOne: false
+            referencedRelation: "cocktails"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory: {
         Row: {
+          abv: number
+          bottle_size_ml: number
           category: string
+          cost_per_ml: number
           created_at: string
           current_stock: number
           id: string
           name: string
           par_level: number
+          pours_per_bottle: number
           status: string
           unit_cost: number
         }
         Insert: {
+          abv?: number
+          bottle_size_ml?: number
           category: string
+          cost_per_ml?: number
           created_at?: string
           current_stock?: number
           id?: string
           name: string
           par_level?: number
+          pours_per_bottle?: number
           status?: string
           unit_cost?: number
         }
         Update: {
+          abv?: number
+          bottle_size_ml?: number
           category?: string
+          cost_per_ml?: number
           created_at?: string
           current_stock?: number
           id?: string
           name?: string
           par_level?: number
+          pours_per_bottle?: number
           status?: string
           unit_cost?: number
         }
