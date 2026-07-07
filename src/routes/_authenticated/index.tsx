@@ -186,6 +186,44 @@ function Overview() {
         />
       </div>
 
+      {/* Cost summary cards (owner only) */}
+      {isOwner && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Link to="/staff" className="block">
+            <Card className="flex items-center justify-between border-border bg-card p-4 transition-colors hover:border-teal/40">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-teal/15 text-teal">
+                  <Users className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Monthly Payroll
+                  </p>
+                  <p className="text-xl font-black text-teal">{eur(payrollTotal)}</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </Card>
+          </Link>
+          <Link to="/costs" className="block">
+            <Card className="flex items-center justify-between border-border bg-card p-4 transition-colors hover:border-orange/40">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-orange/15 text-orange">
+                  <Receipt className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Fixed Costs / mo
+                  </p>
+                  <p className="text-xl font-black text-orange">{eur(fixedTotal)}</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </Card>
+          </Link>
+        </div>
+      )}
+
       {/* Alerts */}
       <Card className="border-border bg-card p-4 md:p-5">
         <div className="mb-3 flex items-center gap-2">
