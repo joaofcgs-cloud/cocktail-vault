@@ -33,7 +33,7 @@ const CAT_COLOR: Record<string, string> = {
   Compliance: "var(--orange)",
 };
 
-const TABS = ["Dashboard", "Costs List", "Payments", "Alerts"] as const;
+const TABS = ["Dashboard", "By Supplier", "Costs List", "Payments", "Alerts"] as const;
 type Tab = (typeof TABS)[number];
 
 const STATUS_BADGE: Record<string, string> = {
