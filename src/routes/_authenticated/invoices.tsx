@@ -33,6 +33,19 @@ import {
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { scanReceipt } from "@/lib/receipt.functions";
+import {
+  createStockNotification,
+  type StockChange,
+} from "@/lib/notifications";
+import type { InventoryStatus } from "@/lib/db";
+
+function computeStatus(stock: number, par: number): InventoryStatus {
+  if (stock <= 0) return "OUT";
+  const ratio = par > 0 ? stock / par : 1;
+  if (ratio < 0.5) return "LOW";
+  if (ratio < 1) return "OK";
+  return "GOOD";
+}
 
 export const Route = createFileRoute("/_authenticated/invoices")({
   head: () => ({ meta: [{ title: "Invoices — Bar Command Center" }] }),
