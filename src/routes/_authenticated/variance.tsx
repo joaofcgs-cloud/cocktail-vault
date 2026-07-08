@@ -163,12 +163,12 @@ function VariancePage() {
             Upload your XD sales export to see variance analysis
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Drag & drop or tap to choose a CSV file
+            Drag & drop or tap to choose a CSV or SAF-T (PT) XML file
           </p>
         </div>
         <input
           type="file"
-          accept=".csv,text/csv,.xlsx,application/vnd.ms-excel"
+          accept=".csv,text/csv,.xlsx,application/vnd.ms-excel,.xml,text/xml,application/xml"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
