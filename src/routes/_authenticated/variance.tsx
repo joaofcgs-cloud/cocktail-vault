@@ -112,7 +112,11 @@ function VariancePage() {
       return;
     }
     const text = await file.text();
-    const parsed = parseCsv(text);
+    const isXml =
+      /\.xml$/i.test(file.name) ||
+      /^\s*<\?xml/.test(text) ||
+      /<AuditFile/i.test(text);
+    const parsed = isXml ? parseSaft(text) : parseCsv(text);
     if (parsed.length === 0) {
       toast.error("Couldn't read any rows from that file.");
       return;
