@@ -19,7 +19,14 @@ const Input = z.object({
 export interface ParsedReceipt {
   vendor: string;
   date: string;
-  items: { product: string; qty: number; unit_price: number; total: number }[];
+  items: {
+    product: string;
+    qty: number;
+    unit_price: number;
+    total: number;
+    category: string;
+    subcategory: string;
+  }[];
   grand_total: number;
   category: string;
   subcategory: string;
@@ -37,14 +44,14 @@ export const scanReceipt = createServerFn({ method: "POST" })
         "Extract structured data from this invoice/receipt.",
         "vendor: the SUPPLIER / seller who ISSUED the invoice (the company whose name and tax number head the document, near the logo or 'Fatura'), NOT the customer/buyer/recipient (do not use fields labelled Cliente, Adquirente, Local de descarga, or the ship-to company).",
         "date: the issue date (Data Emissão) in YYYY-MM-DD.",
-        "For each purchased line item: product name, qty (quantity), unit_price (net unit price), total (line total).",
+        "For each purchased line item: product name, qty (quantity), unit_price (net unit price), total (line total), and its OWN category + subcategory from the taxonomy below (each item may belong to a different category).",
         "Skip items whose quantity is 0 (they are catalogue/price-list rows, not purchases).",
         "Numbers may use a comma as the decimal separator and a dot/space as thousands separator (European format) — normalise them to plain decimals with a dot.",
         "grand_total: the final payable TOTAL of the invoice (the 'TOTAL' including tax), as a number.",
-        "Classify the whole invoice into ONE category and ONE subcategory from this taxonomy (use the exact spelling), based on the vendor and the line items:",
+        "Classify EACH line item into ONE category and ONE subcategory from this taxonomy (use the exact spelling). Also classify the whole invoice into its single most representative category/subcategory:",
         CATEGORY_GUIDE,
         "category: the best-fitting top-level category. subcategory: the best-fitting subcategory within that category. If unsure, pick the closest match.",
-        'Return ONLY this JSON: {"vendor":"","date":"","items":[{"product":"","qty":0,"unit_price":0,"total":0}],"grand_total":0,"category":"","subcategory":""}',
+        'Return ONLY this JSON: {"vendor":"","date":"","items":[{"product":"","qty":0,"unit_price":0,"total":0,"category":"","subcategory":""}],"grand_total":0,"category":"","subcategory":""}',
       ].join("\n");
 
     const userContent: unknown[] = [{ type: "text", text: instruction }];
@@ -112,7 +119,16 @@ export const scanReceipt = createServerFn({ method: "POST" })
     return {
       vendor: parsed.vendor ?? "",
       date: parsed.date ?? new Date().toISOString().slice(0, 10),
-      items: Array.isArray(parsed.items) ? parsed.items : [],
+      items: Array.isArray(parsed.items)
+        ? parsed.items.map((it) => ({
+            product: it.product ?? "",
+            qty: Number(it.qty) || 0,
+            unit_price: Number(it.unit_price) || 0,
+            total: Number(it.total) || 0,
+            category: it.category ?? "",
+            subcategory: it.subcategory ?? "",
+          }))
+        : [],
       grand_total: Number(parsed.grand_total) || 0,
       category: parsed.category ?? "",
       subcategory: parsed.subcategory ?? "",

@@ -68,6 +68,8 @@ interface LineRow {
   inventoryId: string | null;
   confidence: number;
   addStock: boolean;
+  category: string;
+  subcategory: string;
 }
 
 function InvoicesPage() {
@@ -162,14 +164,19 @@ function InvoicesPage() {
   function addBlankRow() {
     setRows((rs) => [
       ...rs,
-      { product: "", qty: 1, unit_price: 0, total: 0, inventoryId: null, confidence: 0, addStock: true },
+      { product: "", qty: 1, unit_price: 0, total: 0, inventoryId: null, confidence: 0, addStock: true, category: "", subcategory: "" },
     ]);
   }
 
   function itemsToText(rs: LineRow[]) {
     return rs
       .filter((r) => r.product.trim())
-      .map((r) => `${r.qty}× ${r.product} @ ${r.unit_price} = ${r.total}`)
+      .map((r) => {
+        const cat = r.category
+          ? ` [${r.category}${r.subcategory ? ` > ${r.subcategory}` : ""}]`
+          : "";
+        return `${r.qty}× ${r.product} @ ${r.unit_price} = ${r.total}${cat}`;
+      })
       .join("\n");
   }
 
@@ -355,6 +362,8 @@ function InvoicesPage() {
       const candidates = inventory.map((i) => ({ id: i.id, name: i.name }));
       const matched: LineRow[] = parsed.items.map((it) => {
         const m = bestMatch(it.product ?? "", candidates);
+        const itemCat = normalizeCategory(it.category) ?? "";
+        const itemSub = normalizeSubcategory(itemCat, it.subcategory) ?? "";
         return {
           product: it.product ?? "",
           qty: Number(it.qty) || 0,
@@ -363,6 +372,8 @@ function InvoicesPage() {
           inventoryId: m.confidence >= 60 ? m.id : null,
           confidence: m.confidence,
           addStock: m.confidence >= 60,
+          category: itemCat,
+          subcategory: itemSub,
         };
       });
       setVendor(parsed.vendor || "");
@@ -505,7 +516,7 @@ function InvoicesPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="category">Category</Label>
+                    <Label htmlFor="category">Overall category</Label>
                     <select
                       id="category"
                       value={category}
@@ -626,6 +637,41 @@ function InvoicesPage() {
                             className="h-5 w-5 accent-teal"
                           />
                         </label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] uppercase text-muted-foreground">Category</span>
+                          <select
+                            value={r.category}
+                            onChange={(e) =>
+                              updateRow(i, { category: e.target.value, subcategory: "" })
+                            }
+                            className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                          >
+                            <option value="">— Select —</option>
+                            {CATEGORIES.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase text-muted-foreground">Subcategory</span>
+                          <select
+                            value={r.subcategory}
+                            disabled={!r.category}
+                            onChange={(e) => updateRow(i, { subcategory: e.target.value })}
+                            className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm disabled:opacity-50"
+                          >
+                            <option value="">— Select —</option>
+                            {subcategoriesFor(r.category).map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </div>
                   ))}
