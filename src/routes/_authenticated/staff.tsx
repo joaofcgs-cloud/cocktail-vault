@@ -207,6 +207,13 @@ function StaffPage() {
     }
   }
 
+  async function handleUploadMany(files: File[]) {
+    if (!files.length) return;
+    for (const f of files) {
+      await handleUpload(f);
+    }
+  }
+
   async function openInvoice(path: string) {
     const { data, error } = await supabase.storage
       .from("receipts")
