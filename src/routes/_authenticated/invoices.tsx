@@ -496,6 +496,54 @@ function InvoicesPage() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="category">Category</Label>
+                    <select
+                      id="category"
+                      value={category}
+                      onChange={(e) => {
+                        setCategory(e.target.value);
+                        setSubcategory("");
+                        setAutoCategorized(false);
+                      }}
+                      className="h-11 w-full rounded-md border border-border bg-background px-2 text-sm"
+                    >
+                      <option value="">— Select —</option>
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="subcategory">Subcategory</Label>
+                    <select
+                      id="subcategory"
+                      value={subcategory}
+                      disabled={!category}
+                      onChange={(e) => {
+                        setSubcategory(e.target.value);
+                        setAutoCategorized(false);
+                      }}
+                      className="h-11 w-full rounded-md border border-border bg-background px-2 text-sm disabled:opacity-50"
+                    >
+                      <option value="">— Select —</option>
+                      {subcategoriesFor(category).map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {autoCategorized && (
+                  <p className="-mt-2 text-xs text-teal">
+                    Auto-categorised — adjust if it's wrong and the app will learn.
+                  </p>
+                )}
+
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>Line items → inventory</Label>
