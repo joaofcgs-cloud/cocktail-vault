@@ -568,7 +568,45 @@ function InvoicesPage() {
                   key={inv.id}
                   className="border-b border-border/60 last:border-0"
                 >
-                  <td className="px-4 py-3 font-medium">{inv.vendor}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {editingId === inv.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={editVendor}
+                          onChange={(e) => setEditVendor(e.target.value)}
+                          list="vendor-suggestions"
+                          autoComplete="off"
+                          className="h-8 w-40 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveVendorEdit(inv.id);
+                            if (e.key === "Escape") setEditingId(null);
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          className="h-8 px-2"
+                          disabled={savingVendor}
+                          onClick={() => saveVendorEdit(inv.id)}
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingId(inv.id);
+                          setEditVendor(inv.vendor ?? "");
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded px-1 -mx-1 text-left hover:bg-secondary/50"
+                        title="Click to edit vendor"
+                      >
+                        {inv.vendor}
+                        <Pencil className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {inv.date ?? "—"}
                   </td>
