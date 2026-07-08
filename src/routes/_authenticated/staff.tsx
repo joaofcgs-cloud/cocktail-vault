@@ -251,14 +251,14 @@ function StaffPage() {
   }
 
   const totals = useMemo(() => {
-    const gross = payroll.reduce((s, p) => s + p.gross_pay, 0);
-    const net = payroll.reduce((s, p) => s + p.net_pay, 0);
-    const tips = payroll.reduce((s, p) => s + p.tips, 0);
-    const base = payroll.reduce((s, p) => s + p.base_pay, 0);
-    const subs = payroll.reduce((s, p) => s + p.meal_subsidy, 0);
-    const ded = payroll.reduce((s, p) => s + p.irs + p.social_security, 0);
+    const gross = filteredPayroll.reduce((s, p) => s + p.gross_pay, 0);
+    const net = filteredPayroll.reduce((s, p) => s + p.net_pay, 0);
+    const tips = filteredPayroll.reduce((s, p) => s + p.tips, 0);
+    const base = filteredPayroll.reduce((s, p) => s + p.base_pay, 0);
+    const subs = filteredPayroll.reduce((s, p) => s + p.meal_subsidy, 0);
+    const ded = filteredPayroll.reduce((s, p) => s + p.irs + p.social_security, 0);
     return { gross, net, tips, base, subs, ded };
-  }, [payroll]);
+  }, [filteredPayroll]);
 
   if (!isOwner) {
     return (
