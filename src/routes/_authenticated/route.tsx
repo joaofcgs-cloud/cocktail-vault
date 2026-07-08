@@ -8,7 +8,14 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   LayoutDashboard,
   Boxes,
@@ -20,7 +27,7 @@ import {
   Wallet,
   TrendingUp,
 } from "lucide-react";
-import { Calculator, BarChart3 } from "lucide-react";
+import { Calculator, BarChart3, User, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationBell } from "@/components/NotificationBell";
 
@@ -63,6 +70,50 @@ function Shell() {
     toast.success("Signed out");
     navigate({ to: "/auth", replace: true });
   }
+  const initials = (user?.email ?? "?").slice(0, 2).toUpperCase();
+
+  function AccountMenu({ side = "top" }: { side?: "top" | "bottom" }) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-label="Account menu"
+            className="grid place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-teal"
+          >
+            <Avatar className="h-8 w-8">
+              <AvatarFallback className="bg-teal/15 text-xs font-bold text-teal">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side={side} className="w-52">
+          <div className="px-2 py-1.5">
+            <p className="truncate text-xs font-medium">{user?.email}</p>
+            <span className="mt-1 inline-block rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+              {role ?? "…"}
+            </span>
+          </div>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => navigate({ to: "/profile" })}>
+            <User className="mr-2 h-4 w-4" /> My Profile
+          </DropdownMenuItem>
+          {role === "owner" && (
+            <DropdownMenuItem onClick={() => navigate({ to: "/users" })}>
+              <Shield className="mr-2 h-4 w-4" /> User Management
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={signOut}
+            className="text-red focus:text-red"
+          >
+            <LogOut className="mr-2 h-4 w-4" /> Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -102,19 +153,15 @@ function Shell() {
           })}
         </nav>
         <div className="mt-4 border-t border-border pt-4">
-          <div className="mb-3 px-2">
-            <p className="truncate text-xs font-medium">{user?.email}</p>
-            <span className="mt-1 inline-block rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-              {role ?? "…"}
-            </span>
+          <div className="flex items-center gap-2 px-1">
+            <AccountMenu side="top" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium">{user?.email}</p>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                {role ?? "…"}
+              </span>
+            </div>
           </div>
-          <Button
-            variant="ghost"
-            onClick={signOut}
-            className="h-10 w-full justify-start gap-2 text-muted-foreground"
-          >
-            <LogOut className="h-4 w-4" /> Sign out
-          </Button>
         </div>
       </aside>
 
@@ -128,13 +175,7 @@ function Shell() {
         </div>
         <div className="flex items-center gap-1">
           <NotificationBell />
-          <button
-            onClick={signOut}
-            aria-label="Sign out"
-            className="grid h-10 w-10 place-items-center rounded-lg text-muted-foreground"
-          >
-            <LogOut className="h-5 w-5" />
-          </button>
+          <AccountMenu side="bottom" />
         </div>
       </header>
 

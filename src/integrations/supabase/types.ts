@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          admin_email: string | null
+          admin_id: string | null
+          created_at: string
+          detail: string | null
+          id: string
+          status: string
+          target_email: string | null
+          target_id: string | null
+        }
+        Insert: {
+          action: string
+          admin_email?: string | null
+          admin_id?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          status?: string
+          target_email?: string | null
+          target_id?: string | null
+        }
+        Update: {
+          action?: string
+          admin_email?: string | null
+          admin_id?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          status?: string
+          target_email?: string | null
+          target_id?: string | null
+        }
+        Relationships: []
+      }
       batch_ingredients: {
         Row: {
           amount_ml: number
