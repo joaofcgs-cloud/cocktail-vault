@@ -317,19 +317,17 @@ function CostsPage() {
     const headers = [
       "Service",
       "Category",
-      "Amount",
+      `Amount (${periodLabel})`,
       "Due Day",
       "Vendor",
-      `Invoiced (${periodLabel})`,
       "Status",
     ];
     const rows = listed.map((c) => [
       c.name,
       c.category,
-      c.amount.toFixed(2),
+      invoicedFor(c.vendor).toFixed(2),
       c.due_day,
       c.vendor ?? "",
-      invoicedFor(c.vendor).toFixed(2),
       payByCost[c.id]?.status ?? "pending",
     ]);
     downloadCsv([headers, ...rows], `service-costs-${periodLabel}.csv`);
