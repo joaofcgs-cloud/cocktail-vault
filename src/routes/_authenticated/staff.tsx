@@ -274,7 +274,7 @@ function StaffPage() {
 
   function exportPayroll() {
     const headers = ["Name", "Role", "Base", "Meal", "Tips", "Gross", "IRS", "SS", "Net", "Days"];
-    const rows = payroll.map((p) => {
+    const rows = filteredPayroll.map((p) => {
       const s = byId[p.staff_id ?? ""];
       return [
         s?.name ?? "—",
@@ -296,20 +296,20 @@ function StaffPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "payroll-2026-06.csv";
+    a.download = `payroll-${period === "all" ? "all" : period}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   const roleTotals = useMemo(() => {
     const map = new Map<string, number>();
-    for (const p of payroll) {
+    for (const p of filteredPayroll) {
       const s = byId[p.staff_id ?? ""];
       const role = s?.role ?? "Other";
       map.set(role, (map.get(role) ?? 0) + p.gross_pay);
     }
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
-  }, [payroll, byId]);
+  }, [filteredPayroll, byId]);
   const roleMax = roleTotals.length ? roleTotals[0][1] : 1;
 
   return (
