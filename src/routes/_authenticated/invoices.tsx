@@ -362,6 +362,8 @@ function InvoicesPage() {
       const candidates = inventory.map((i) => ({ id: i.id, name: i.name }));
       const matched: LineRow[] = parsed.items.map((it) => {
         const m = bestMatch(it.product ?? "", candidates);
+        const itemCat = normalizeCategory(it.category) ?? "";
+        const itemSub = normalizeSubcategory(itemCat, it.subcategory) ?? "";
         return {
           product: it.product ?? "",
           qty: Number(it.qty) || 0,
@@ -370,6 +372,8 @@ function InvoicesPage() {
           inventoryId: m.confidence >= 60 ? m.id : null,
           confidence: m.confidence,
           addStock: m.confidence >= 60,
+          category: itemCat,
+          subcategory: itemSub,
         };
       });
       setVendor(parsed.vendor || "");
