@@ -455,6 +455,11 @@ function CostsPage() {
 
       {tab === "Costs List" && (
         <>
+          <datalist id="cost-vendor-suggestions">
+            {vendorOptions.map((v) => (
+              <option key={v} value={v} />
+            ))}
+          </datalist>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="h-11 w-56">
