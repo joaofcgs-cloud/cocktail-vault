@@ -6,6 +6,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useInventory } from "@/lib/queries";
 import { bestMatch } from "@/lib/match";
+import {
+  CATEGORIES,
+  subcategoriesFor,
+  vendorKey,
+  normalizeCategory,
+  normalizeSubcategory,
+} from "@/lib/categories";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +78,9 @@ function InvoicesPage() {
   const [vendor, setVendor] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [total, setTotal] = useState("");
+  const [category, setCategory] = useState("");
+  const [subcategory, setSubcategory] = useState("");
+  const [autoCategorized, setAutoCategorized] = useState(false);
   const [rows, setRows] = useState<LineRow[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -79,6 +89,7 @@ function InvoicesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editVendor, setEditVendor] = useState("");
   const [savingVendor, setSavingVendor] = useState(false);
+  const [filterCat, setFilterCat] = useState<string>("all");
 
   const { data: invoices = [] } = useQuery({
     queryKey: ["invoices"],
@@ -89,6 +100,22 @@ function InvoicesPage() {
         .order("date", { ascending: false });
       if (error) throw error;
       return data;
+    },
+  });
+
+  // Learned supplier → category mappings (grows as invoices are saved).
+  const { data: learned = [] } = useQuery({
+    queryKey: ["vendor_categories"],
+    queryFn: async () => {
+      const { data, error } = await db.from("vendor_categories").select("*");
+      if (error) throw error;
+      return data as {
+        vendor_key: string;
+        vendor: string;
+        category: string;
+        subcategory: string | null;
+        hits: number;
+      }[];
     },
   });
 
@@ -121,6 +148,9 @@ function InvoicesPage() {
     setVendor("");
     setDate(new Date().toISOString().slice(0, 10));
     setTotal("");
+    setCategory("");
+    setSubcategory("");
+    setAutoCategorized(false);
     setRows([]);
     setFile(null);
   }
@@ -168,10 +198,37 @@ function InvoicesPage() {
           items: itemsToText(rows) || null,
           receipt_url,
           created_by: user?.id,
+          category: category || null,
+          subcategory: subcategory || null,
         })
         .select("id")
         .single();
       if (error) throw error;
+
+      // Learn: remember this supplier's category for future auto-categorisation.
+      if (category && vendor.trim()) {
+        const key = vendorKey(vendor);
+        const existing = learned.find((l) => l.vendor_key === key);
+        if (existing) {
+          await db
+            .from("vendor_categories")
+            .update({
+              vendor: vendor.trim(),
+              category,
+              subcategory: subcategory || null,
+              hits: (existing.hits ?? 1) + 1,
+            })
+            .eq("vendor_key", key);
+        } else {
+          await db.from("vendor_categories").insert({
+            vendor_key: key,
+            vendor: vendor.trim(),
+            category,
+            subcategory: subcategory || null,
+          });
+        }
+        qc.invalidateQueries({ queryKey: ["vendor_categories"] });
+      }
 
       // Auto-update stock for confirmed, matched line items
       const stockRows = rows.filter((r) => r.addStock && r.inventoryId && r.qty > 0);
@@ -314,7 +371,27 @@ function InvoicesPage() {
       setRows(matched);
       setFile(f);
       setOpen(true);
-      toast.success("File read — review matches and save.");
+
+      // Categorise: prefer what we've learned for this supplier, else use AI.
+      const key = vendorKey(parsed.vendor || "");
+      const known = key ? learned.find((l) => l.vendor_key === key) : undefined;
+      let cat = "";
+      let sub = "";
+      if (known) {
+        cat = normalizeCategory(known.category) ?? "";
+        sub = normalizeSubcategory(cat, known.subcategory) ?? "";
+      } else {
+        cat = normalizeCategory(parsed.category) ?? "";
+        sub = normalizeSubcategory(cat, parsed.subcategory) ?? "";
+      }
+      setCategory(cat);
+      setSubcategory(sub);
+      setAutoCategorized(!!cat);
+      toast.success(
+        cat
+          ? `File read — suggested category: ${cat}. Review and save.`
+          : "File read — review matches and save.",
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Scan failed");
     } finally {
@@ -323,6 +400,13 @@ function InvoicesPage() {
   }
 
   const flagged = rows.filter((r) => !r.inventoryId).length;
+
+  const shownInvoices =
+    filterCat === "all"
+      ? invoices
+      : filterCat === "__uncat"
+        ? invoices.filter((i) => !i.category)
+        : invoices.filter((i) => i.category === filterCat);
 
   return (
     <div className="space-y-6">
@@ -418,6 +502,54 @@ function InvoicesPage() {
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="category">Category</Label>
+                    <select
+                      id="category"
+                      value={category}
+                      onChange={(e) => {
+                        setCategory(e.target.value);
+                        setSubcategory("");
+                        setAutoCategorized(false);
+                      }}
+                      className="h-11 w-full rounded-md border border-border bg-background px-2 text-sm"
+                    >
+                      <option value="">— Select —</option>
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="subcategory">Subcategory</Label>
+                    <select
+                      id="subcategory"
+                      value={subcategory}
+                      disabled={!category}
+                      onChange={(e) => {
+                        setSubcategory(e.target.value);
+                        setAutoCategorized(false);
+                      }}
+                      className="h-11 w-full rounded-md border border-border bg-background px-2 text-sm disabled:opacity-50"
+                    >
+                      <option value="">— Select —</option>
+                      {subcategoriesFor(category).map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {autoCategorized && (
+                  <p className="-mt-2 text-xs text-teal">
+                    Auto-categorised — adjust if it's wrong and the app will learn.
+                  </p>
+                )}
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -551,12 +683,58 @@ function InvoicesPage() {
         </div>
       </Card>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setFilterCat("all")}
+          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+            filterCat === "all"
+              ? "bg-teal text-primary-foreground"
+              : "bg-secondary text-muted-foreground hover:bg-secondary/70"
+          }`}
+        >
+          All ({invoices.length})
+        </button>
+        {CATEGORIES.map((c) => {
+          const count = invoices.filter((i) => i.category === c).length;
+          if (count === 0) return null;
+          return (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setFilterCat(c)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                filterCat === c
+                  ? "bg-teal text-primary-foreground"
+                  : "bg-secondary text-muted-foreground hover:bg-secondary/70"
+              }`}
+            >
+              {c} ({count})
+            </button>
+          );
+        })}
+        {invoices.some((i) => !i.category) && (
+          <button
+            type="button"
+            onClick={() => setFilterCat("__uncat")}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+              filterCat === "__uncat"
+                ? "bg-teal text-primary-foreground"
+                : "bg-secondary text-muted-foreground hover:bg-secondary/70"
+            }`}
+          >
+            Uncategorised ({invoices.filter((i) => !i.category).length})
+          </button>
+        )}
+      </div>
+
       <Card className="border-border bg-card p-0">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-4 py-3 font-semibold">Vendor</th>
+                <th className="px-4 py-3 font-semibold">Category</th>
                 <th className="px-4 py-3 font-semibold">Date</th>
                 <th className="px-4 py-3 text-right font-semibold">Total</th>
                 <th className="px-4 py-3 font-semibold">Items</th>
@@ -564,7 +742,7 @@ function InvoicesPage() {
               </tr>
             </thead>
             <tbody>
-              {invoices.map((inv) => (
+              {shownInvoices.map((inv) => (
                 <tr
                   key={inv.id}
                   className="border-b border-border/60 last:border-0"
@@ -608,6 +786,20 @@ function InvoicesPage() {
                       </button>
                     )}
                   </td>
+                  <td className="px-4 py-3">
+                    {inv.category ? (
+                      <div className="flex flex-col">
+                        <span className="font-medium">{inv.category}</span>
+                        {inv.subcategory && (
+                          <span className="text-xs text-muted-foreground">
+                            {inv.subcategory}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {inv.date ?? "—"}
                   </td>
@@ -631,13 +823,13 @@ function InvoicesPage() {
                   </td>
                 </tr>
               ))}
-              {invoices.length === 0 && (
+              {shownInvoices.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-10 text-center text-muted-foreground"
                   >
-                    No invoices yet. Add your first one.
+                    No invoices in this category yet.
                   </td>
                 </tr>
               )}

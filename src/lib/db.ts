@@ -39,6 +39,8 @@ export interface Invoice {
   receipt_url: string | null;
   created_by: string | null;
   created_at: string;
+  category: string | null;
+  subcategory: string | null;
 }
 
 export interface DailySale {
