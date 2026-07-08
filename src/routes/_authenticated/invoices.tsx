@@ -164,14 +164,19 @@ function InvoicesPage() {
   function addBlankRow() {
     setRows((rs) => [
       ...rs,
-      { product: "", qty: 1, unit_price: 0, total: 0, inventoryId: null, confidence: 0, addStock: true },
+      { product: "", qty: 1, unit_price: 0, total: 0, inventoryId: null, confidence: 0, addStock: true, category: "", subcategory: "" },
     ]);
   }
 
   function itemsToText(rs: LineRow[]) {
     return rs
       .filter((r) => r.product.trim())
-      .map((r) => `${r.qty}× ${r.product} @ ${r.unit_price} = ${r.total}`)
+      .map((r) => {
+        const cat = r.category
+          ? ` [${r.category}${r.subcategory ? ` > ${r.subcategory}` : ""}]`
+          : "";
+        return `${r.qty}× ${r.product} @ ${r.unit_price} = ${r.total}${cat}`;
+      })
       .join("\n");
   }
 
