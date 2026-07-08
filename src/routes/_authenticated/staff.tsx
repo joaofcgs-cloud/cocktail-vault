@@ -105,14 +105,14 @@ function StaffPage() {
     });
   }
 
-  async function importPayroll(file: File) {
+  async function importPayroll(file: File): Promise<{ month: number; year: number } | null> {
     const dataUrl = await fileToDataUrl(file);
     const parsed = await runScan({
       data: { fileDataUrl: dataUrl, mimeType: file.type, fileName: file.name },
     });
     if (!parsed.employees.length) {
       toast.error("AI could not find any employees in this file.");
-      return;
+      return null;
     }
     let inserted = 0;
     for (const e of parsed.employees) {
@@ -179,6 +179,7 @@ function StaffPage() {
     toast.success(`AI imported ${inserted} payslip${inserted > 1 ? "s" : ""}.`);
     qc.invalidateQueries({ queryKey: ["staff"] });
     qc.invalidateQueries({ queryKey: ["payroll_records"] });
+    return { month: parsed.month, year: parsed.year };
   }
 
   async function handleUpload(file: File) {
@@ -192,15 +193,27 @@ function StaffPage() {
     setBusy(true);
     try {
       const safeName = file.name.replace(/[^\w.\-]/g, "_");
-      const path = `${user.id}/payroll/${upYear}-${String(upMonth).padStart(2, "0")}-${Date.now()}-${safeName}`;
+      // When auto-read is on, read the invoice first so we store its real month/year
+      let invMonth = upMonth;
+      let invYear = upYear;
+      let parsedPeriod: { month: number; year: number } | null = null;
+      if (autoRead) {
+        toast.info("Reading payslip with AI…");
+        parsedPeriod = await importPayroll(file);
+        if (parsedPeriod) {
+          invMonth = parsedPeriod.month;
+          invYear = parsedPeriod.year;
+        }
+      }
+      const path = `${user.id}/payroll/${invYear}-${String(invMonth).padStart(2, "0")}-${Date.now()}-${safeName}`;
       const { error: upErr } = await supabase.storage
         .from("receipts")
         .upload(path, file);
       if (upErr) throw upErr;
       const { error } = await db.from("payroll_invoices").insert({
         staff_id: uploadStaff || null,
-        month: upMonth,
-        year: upYear,
+        month: invMonth,
+        year: invYear,
         file_name: file.name,
         file_path: path,
         uploaded_by: user.id,
@@ -208,10 +221,6 @@ function StaffPage() {
       if (error) throw error;
       toast.success("Salary invoice uploaded.");
       qc.invalidateQueries({ queryKey: ["payroll_invoices"] });
-      if (autoRead) {
-        toast.info("Reading payslip with AI…");
-        await importPayroll(file);
-      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {
