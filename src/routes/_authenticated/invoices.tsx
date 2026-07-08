@@ -29,6 +29,7 @@ import {
   Check,
   AlertTriangle,
   Flag,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -75,6 +76,9 @@ function InvoicesPage() {
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   const runScan = useServerFn(scanReceipt);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editVendor, setEditVendor] = useState("");
+  const [savingVendor, setSavingVendor] = useState(false);
 
   const { data: invoices = [] } = useQuery({
     queryKey: ["invoices"],
@@ -87,6 +91,31 @@ function InvoicesPage() {
       return data;
     },
   });
+
+  // Distinct, sorted list of previously used suppliers for autocomplete.
+  const vendorOptions = Array.from(
+    new Set(invoices.map((i) => i.vendor?.trim()).filter(Boolean) as string[]),
+  ).sort((a, b) => a.localeCompare(b));
+
+  async function saveVendorEdit(id: string) {
+    const name = editVendor.trim();
+    if (!name) {
+      toast.error("Vendor is required.");
+      return;
+    }
+    setSavingVendor(true);
+    try {
+      const { error } = await db.from("invoices").update({ vendor: name }).eq("id", id);
+      if (error) throw error;
+      toast.success("Vendor updated.");
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      setEditingId(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update vendor");
+    } finally {
+      setSavingVendor(false);
+    }
+  }
 
   function reset() {
     setVendor("");
@@ -353,7 +382,17 @@ function InvoicesPage() {
                     onChange={(e) => setVendor(e.target.value)}
                     placeholder="Supplier name"
                     className="h-11"
+                    list="vendor-suggestions"
+                    autoComplete="off"
                   />
+                  <datalist id="vendor-suggestions">
+                    {vendorOptions.map((v) => (
+                      <option key={v} value={v} />
+                    ))}
+                  </datalist>
+                  <p className="text-xs text-muted-foreground">
+                    Start typing to pick from saved suppliers and keep names consistent.
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
@@ -530,7 +569,45 @@ function InvoicesPage() {
                   key={inv.id}
                   className="border-b border-border/60 last:border-0"
                 >
-                  <td className="px-4 py-3 font-medium">{inv.vendor}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {editingId === inv.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={editVendor}
+                          onChange={(e) => setEditVendor(e.target.value)}
+                          list="vendor-suggestions"
+                          autoComplete="off"
+                          className="h-8 w-40 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveVendorEdit(inv.id);
+                            if (e.key === "Escape") setEditingId(null);
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          className="h-8 px-2"
+                          disabled={savingVendor}
+                          onClick={() => saveVendorEdit(inv.id)}
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingId(inv.id);
+                          setEditVendor(inv.vendor ?? "");
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded px-1 -mx-1 text-left hover:bg-secondary/50"
+                        title="Click to edit vendor"
+                      >
+                        {inv.vendor}
+                        <Pencil className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {inv.date ?? "—"}
                   </td>
