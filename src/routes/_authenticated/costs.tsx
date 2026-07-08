@@ -462,7 +462,8 @@ function CostsPage() {
 
       {tab === "By Supplier" && (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
             <Select value={String(selMonth)} onValueChange={(v) => setSelMonth(Number(v))}>
               <SelectTrigger className="h-11 w-44">
                 <SelectValue />
@@ -487,6 +488,15 @@ function CostsPage() {
                 ))}
               </SelectContent>
             </Select>
+            </div>
+            <Button
+              variant="outline"
+              onClick={exportSupplierCsv}
+              disabled={bySupplier.length === 0}
+              className="h-11 gap-2"
+            >
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
