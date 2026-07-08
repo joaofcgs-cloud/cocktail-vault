@@ -80,7 +80,6 @@ function StaffPage() {
   const [upMonth, setUpMonth] = useState(now.getMonth() + 1);
   const [upYear, setUpYear] = useState(now.getFullYear());
   const [busy, setBusy] = useState(false);
-  const [autoRead, setAutoRead] = useState(true);
   const runScan = useServerFn(scanPayroll);
 
   // Period filter for payroll views (month/year)
