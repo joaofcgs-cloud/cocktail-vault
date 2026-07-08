@@ -401,6 +401,13 @@ function InvoicesPage() {
 
   const flagged = rows.filter((r) => !r.inventoryId).length;
 
+  const shownInvoices =
+    filterCat === "all"
+      ? invoices
+      : filterCat === "__uncat"
+        ? invoices.filter((i) => !i.category)
+        : invoices.filter((i) => i.category === filterCat);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
