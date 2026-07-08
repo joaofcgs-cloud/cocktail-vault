@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { db, type ServiceCost, type ServiceCostPayment } from "@/lib/db";
+import { db, type ServiceCost, type ServiceCostPayment, type Invoice } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,7 @@ function CostsPage() {
   const now = new Date();
   const [selMonth, setSelMonth] = useState(now.getMonth() + 1);
   const [selYear, setSelYear] = useState(now.getFullYear());
+  const [periodMode, setPeriodMode] = useState<"month" | "year">("month");
   const [editVendorId, setEditVendorId] = useState<string | null>(null);
   const [editVendorVal, setEditVendorVal] = useState("");
   const [savingVendor, setSavingVendor] = useState(false);
@@ -104,6 +105,38 @@ function CostsPage() {
       ).sort((a, b) => a.localeCompare(b)),
     [costs, invoiceVendors],
   );
+
+  // Full invoices for computing per-vendor invoiced totals.
+  const { data: invoices = [] } = useQuery({
+    queryKey: ["invoices_full"],
+    queryFn: async (): Promise<Invoice[]> => {
+      const { data, error } = await db
+        .from("invoices")
+        .select("*")
+        .order("date", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOwner,
+  });
+
+  // Sum of invoice totals per vendor, filtered by the selected period.
+  const invoiceTotalByVendor = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const inv of invoices) {
+      if (!inv.vendor) continue;
+      const d = inv.date ? new Date(inv.date) : null;
+      if (!d || Number.isNaN(d.getTime())) continue;
+      if (d.getFullYear() !== selYear) continue;
+      if (periodMode === "month" && d.getMonth() + 1 !== selMonth) continue;
+      const key = inv.vendor.trim();
+      map.set(key, (map.get(key) ?? 0) + (inv.total ?? 0));
+    }
+    return map;
+  }, [invoices, periodMode, selMonth, selYear]);
+
+  const invoicedFor = (vendor: string | null) =>
+    vendor ? invoiceTotalByVendor.get(vendor.trim()) ?? 0 : 0;
 
   async function saveVendor(costId: string) {
     const name = editVendorVal.trim();
@@ -166,9 +199,12 @@ function CostsPage() {
   const yearOptions = useMemo(() => {
     const set = new Set<number>([now.getFullYear()]);
     payments.forEach((p) => set.add(p.year));
-    costs.length; // ensure recompute when costs load
+    invoices.forEach((inv) => {
+      const d = inv.date ? new Date(inv.date) : null;
+      if (d && !Number.isNaN(d.getTime())) set.add(d.getFullYear());
+    });
     return [...set].sort((a, b) => b - a);
-  }, [payments, now]);
+  }, [payments, invoices, now]);
 
   const bySupplier = useMemo(() => {
     const periodPay = new Map(
@@ -261,26 +297,60 @@ function CostsPage() {
     }
   }
 
-  function exportCsv() {
-    const headers = ["Service", "Category", "Amount", "Due Day", "Vendor", "Status"];
-    const rows = costs.map((c) => [
-      c.name,
-      c.category,
-      c.amount.toFixed(2),
-      c.due_day,
-      c.vendor ?? "",
-      payByCost[c.id]?.status ?? "pending",
-    ]);
-    const csv = [headers, ...rows]
+  const periodLabel =
+    periodMode === "month" ? `${MONTH_NAMES[selMonth - 1]}-${selYear}` : `${selYear}`;
+
+  function downloadCsv(rows: (string | number)[][], filename: string) {
+    const csv = rows
       .map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","))
       .join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "service-costs.csv";
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function exportCsv() {
+    const headers = [
+      "Service",
+      "Category",
+      "Amount",
+      "Due Day",
+      "Vendor",
+      `Invoiced (${periodLabel})`,
+      "Status",
+    ];
+    const rows = listed.map((c) => [
+      c.name,
+      c.category,
+      c.amount.toFixed(2),
+      c.due_day,
+      c.vendor ?? "",
+      invoicedFor(c.vendor).toFixed(2),
+      payByCost[c.id]?.status ?? "pending",
+    ]);
+    downloadCsv([headers, ...rows], `service-costs-${periodLabel}.csv`);
+  }
+
+  function exportSupplierCsv() {
+    const headers = ["Vendor", "Service", "Category", "Expected", "Paid", "Status"];
+    const rows: (string | number)[][] = [];
+    for (const g of bySupplier) {
+      for (const it of g.items) {
+        rows.push([
+          g.supplier,
+          it.name,
+          it.category,
+          it.expected.toFixed(2),
+          it.paid.toFixed(2),
+          it.status,
+        ]);
+      }
+    }
+    downloadCsv([headers, ...rows], `costs-by-supplier-${MONTH_NAMES[selMonth - 1]}-${selYear}.csv`);
   }
 
   return (
@@ -310,6 +380,27 @@ function CostsPage() {
 
       {tab === "Dashboard" && (
         <div className="space-y-6">
+          <PeriodControl
+            periodMode={periodMode}
+            setPeriodMode={setPeriodMode}
+            selMonth={selMonth}
+            setSelMonth={setSelMonth}
+            selYear={selYear}
+            setSelYear={setSelYear}
+            monthNames={MONTH_NAMES}
+            yearOptions={yearOptions}
+          />
+          <Card className="border-border bg-card p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Invoiced ({periodLabel})
+            </p>
+            <p className="mt-2 text-2xl font-black text-teal">
+              {eur([...invoiceTotalByVendor.values()].reduce((s, v) => s + v, 0))}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Total of invoices for {periodMode === "month" ? `${MONTH_NAMES[selMonth - 1]} ${selYear}` : selYear}
+            </p>
+          </Card>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <MiniKpi label="Monthly Fixed" value={eur(monthly)} tone="var(--teal)" />
             <MiniKpi label="Paid" value={eur(paid)} tone="var(--green)" />
@@ -371,7 +462,8 @@ function CostsPage() {
 
       {tab === "By Supplier" && (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
             <Select value={String(selMonth)} onValueChange={(v) => setSelMonth(Number(v))}>
               <SelectTrigger className="h-11 w-44">
                 <SelectValue />
@@ -396,6 +488,15 @@ function CostsPage() {
                 ))}
               </SelectContent>
             </Select>
+            </div>
+            <Button
+              variant="outline"
+              onClick={exportSupplierCsv}
+              disabled={bySupplier.length === 0}
+              className="h-11 gap-2"
+            >
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
@@ -460,6 +561,16 @@ function CostsPage() {
               <option key={v} value={v} />
             ))}
           </datalist>
+          <PeriodControl
+            periodMode={periodMode}
+            setPeriodMode={setPeriodMode}
+            selMonth={selMonth}
+            setSelMonth={setSelMonth}
+            selYear={selYear}
+            setSelYear={setSelYear}
+            monthNames={MONTH_NAMES}
+            yearOptions={yearOptions}
+          />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="h-11 w-56">
@@ -488,6 +599,7 @@ function CostsPage() {
                     <th className="px-4 py-3 text-right font-semibold">Amount</th>
                     <th className="px-4 py-3 text-right font-semibold">Due</th>
                     <th className="px-4 py-3 font-semibold">Vendor</th>
+                    <th className="px-4 py-3 text-right font-semibold">Invoiced ({periodLabel})</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
                     <th className="px-4 py-3 text-center font-semibold">Action</th>
                   </tr>
@@ -539,6 +651,9 @@ function CostsPage() {
                               <Pencil className="h-3 w-3" />
                             </button>
                           )}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-teal">
+                          {invoicedFor(c.vendor) > 0 ? eur(invoicedFor(c.vendor)) : "—"}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_BADGE[status]}`}>
@@ -634,6 +749,70 @@ function CostsPage() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function PeriodControl({
+  periodMode,
+  setPeriodMode,
+  selMonth,
+  setSelMonth,
+  selYear,
+  setSelYear,
+  monthNames,
+  yearOptions,
+}: {
+  periodMode: "month" | "year";
+  setPeriodMode: (m: "month" | "year") => void;
+  selMonth: number;
+  setSelMonth: (m: number) => void;
+  selYear: number;
+  setSelYear: (y: number) => void;
+  monthNames: string[];
+  yearOptions: number[];
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex gap-1 rounded-xl bg-secondary p-1">
+        {(["month", "year"] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setPeriodMode(m)}
+            className={`h-9 shrink-0 rounded-lg px-4 text-sm font-semibold capitalize transition-colors ${
+              periodMode === m ? "bg-card text-foreground shadow" : "text-muted-foreground"
+            }`}
+          >
+            By {m}
+          </button>
+        ))}
+      </div>
+      {periodMode === "month" && (
+        <Select value={String(selMonth)} onValueChange={(v) => setSelMonth(Number(v))}>
+          <SelectTrigger className="h-11 w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {monthNames.map((m, i) => (
+              <SelectItem key={m} value={String(i + 1)}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      <Select value={String(selYear)} onValueChange={(v) => setSelYear(Number(v))}>
+        <SelectTrigger className="h-11 w-32">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {yearOptions.map((y) => (
+            <SelectItem key={y} value={String(y)}>
+              {y}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
