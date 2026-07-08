@@ -207,6 +207,13 @@ function StaffPage() {
     }
   }
 
+  async function handleUploadMany(files: File[]) {
+    if (!files.length) return;
+    for (const f of files) {
+      await handleUpload(f);
+    }
+  }
+
   async function openInvoice(path: string) {
     const { data, error } = await supabase.storage
       .from("receipts")
@@ -532,10 +539,11 @@ function StaffPage() {
               ref={fileRef}
               type="file"
               accept="application/pdf,image/*"
+              multiple
               className="hidden"
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleUpload(f);
+                const fs = e.target.files ? Array.from(e.target.files) : [];
+                if (fs.length) handleUploadMany(fs);
               }}
             />
             <Button
