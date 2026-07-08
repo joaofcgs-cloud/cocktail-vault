@@ -52,6 +52,9 @@ function CostsPage() {
   const now = new Date();
   const [selMonth, setSelMonth] = useState(now.getMonth() + 1);
   const [selYear, setSelYear] = useState(now.getFullYear());
+  const [editVendorId, setEditVendorId] = useState<string | null>(null);
+  const [editVendorVal, setEditVendorVal] = useState("");
+  const [savingVendor, setSavingVendor] = useState(false);
 
   const { data: costs = [] } = useQuery({
     queryKey: ["service_costs"],
@@ -75,6 +78,49 @@ function CostsPage() {
     },
     enabled: isOwner,
   });
+
+  // Supplier suggestions: existing cost vendors + invoice vendors, for consistency.
+  const { data: invoiceVendors = [] } = useQuery({
+    queryKey: ["invoice_vendors"],
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await db.from("invoices").select("vendor");
+      if (error) throw error;
+      return (data ?? []).map((r) => r.vendor).filter(Boolean) as string[];
+    },
+    enabled: isOwner,
+  });
+
+  const vendorOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [
+            ...costs.map((c) => c.vendor?.trim()),
+            ...invoiceVendors.map((v) => v?.trim()),
+          ].filter(Boolean) as string[],
+        ),
+      ).sort((a, b) => a.localeCompare(b)),
+    [costs, invoiceVendors],
+  );
+
+  async function saveVendor(costId: string) {
+    const name = editVendorVal.trim();
+    setSavingVendor(true);
+    try {
+      const { error } = await db
+        .from("service_costs")
+        .update({ vendor: name || null })
+        .eq("id", costId);
+      if (error) throw error;
+      toast.success("Vendor updated.");
+      qc.invalidateQueries({ queryKey: ["service_costs"] });
+      setEditVendorId(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update vendor");
+    } finally {
+      setSavingVendor(false);
+    }
+  }
 
   const payByCost = useMemo(
     () => Object.fromEntries(payments.map((p) => [p.service_cost_id, p])),
