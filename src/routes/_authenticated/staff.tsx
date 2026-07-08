@@ -193,18 +193,11 @@ function StaffPage() {
     setBusy(true);
     try {
       const safeName = file.name.replace(/[^\w.\-]/g, "_");
-      // When auto-read is on, read the invoice first so we store its real month/year
-      let invMonth = upMonth;
-      let invYear = upYear;
-      let parsedPeriod: { month: number; year: number } | null = null;
-      if (autoRead) {
-        toast.info("Reading payslip with AI…");
-        parsedPeriod = await importPayroll(file);
-        if (parsedPeriod) {
-          invMonth = parsedPeriod.month;
-          invYear = parsedPeriod.year;
-        }
-      }
+      // Always read the invoice first so we store its real month/year
+      toast.info("Reading payslip with AI…");
+      const parsedPeriod = await importPayroll(file);
+      const invMonth = parsedPeriod ? parsedPeriod.month : upMonth;
+      const invYear = parsedPeriod ? parsedPeriod.year : upYear;
       const path = `${user.id}/payroll/${invYear}-${String(invMonth).padStart(2, "0")}-${Date.now()}-${safeName}`;
       const { error: upErr } = await supabase.storage
         .from("receipts")
