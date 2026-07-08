@@ -19,6 +19,63 @@ interface Row {
   discrepancy: number;
 }
 
+// Parse a Portuguese SAF-T (PT) XML file and aggregate quantity sold per product.
+function parseSaft(text: string): Row[] {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.querySelector("parsererror")) return [];
+
+  // Namespace-agnostic tag lookup (SAF-T files declare a default namespace).
+  const localName = (el: Element, name: string) =>
+    Array.from(el.children).filter(
+      (c) => c.localName === name || c.nodeName === name,
+    );
+  const firstText = (el: Element, name: string) =>
+    localName(el, name)[0]?.textContent?.trim() ?? "";
+
+  // Optional product master list for nicer names (ProductCode -> Description).
+  const nameByCode = new Map<string, string>();
+  Array.from(doc.getElementsByTagName("*"))
+    .filter((el) => el.localName === "Product")
+    .forEach((p) => {
+      const code = firstText(p, "ProductCode");
+      const desc = firstText(p, "ProductDescription");
+      if (code && desc) nameByCode.set(code, desc);
+    });
+
+  // Aggregate quantities across all sales-invoice lines.
+  const totals = new Map<string, number>();
+  const lines = Array.from(doc.getElementsByTagName("*")).filter(
+    (el) => el.localName === "Line" && el.closest,
+  );
+  lines.forEach((line) => {
+    // Only count lines that belong to SalesInvoices (skip stock movements etc.).
+    let anc: Element | null = line.parentElement;
+    let inSales = false;
+    while (anc) {
+      if (anc.localName === "SalesInvoices" || anc.localName === "Invoice") {
+        inSales = true;
+        break;
+      }
+      anc = anc.parentElement;
+    }
+    if (!inSales) return;
+
+    const code = firstText(line, "ProductCode");
+    const desc = firstText(line, "ProductDescription");
+    const label = desc || nameByCode.get(code) || code || "Unknown";
+    const qty = parseFloat(firstText(line, "Quantity")) || 0;
+    if (!label || qty === 0) return;
+    totals.set(label, (totals.get(label) ?? 0) + qty);
+  });
+
+  return Array.from(totals.entries()).map(([product, actual]) => ({
+    product,
+    expected: actual,
+    actual,
+    discrepancy: 0,
+  }));
+}
+
 function parseCsv(text: string): Row[] {
   const lines = text.trim().split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
