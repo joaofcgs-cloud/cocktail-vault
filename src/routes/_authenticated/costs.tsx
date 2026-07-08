@@ -146,20 +146,16 @@ function CostsPage() {
   const invoicedFor = (vendor: string | null) =>
     vendor ? invoiceTotalByVendor.get(vendor.trim()) ?? 0 : 0;
 
-  // Invoices for the currently selected supplier, filtered by the active period.
+  // All uploaded invoices for the currently selected supplier.
   const supplierInvoices = useMemo(() => {
     if (!selectedSupplier) return [];
     return invoices
       .filter((inv) => {
         if (!inv.vendor) return false;
-        const d = inv.date ? new Date(inv.date) : null;
-        if (!d || Number.isNaN(d.getTime())) return false;
-        if (d.getFullYear() !== selYear) return false;
-        if (periodMode === "month" && d.getMonth() + 1 !== selMonth) return false;
         return inv.vendor.trim().toLowerCase() === selectedSupplier.trim().toLowerCase();
       })
       .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-  }, [invoices, selectedSupplier, periodMode, selMonth, selYear]);
+  }, [invoices, selectedSupplier]);
 
   const supplierInvoicesTotal = supplierInvoices.reduce((s, inv) => s + (inv.total ?? 0), 0);
 
