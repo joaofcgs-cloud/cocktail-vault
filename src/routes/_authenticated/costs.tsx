@@ -596,10 +596,9 @@ function CostsPage() {
                   <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <th className="px-4 py-3 font-semibold">Service</th>
                     <th className="px-4 py-3 font-semibold">Category</th>
-                    <th className="px-4 py-3 text-right font-semibold">Amount</th>
+                    <th className="px-4 py-3 text-right font-semibold">Amount ({periodLabel})</th>
                     <th className="px-4 py-3 text-right font-semibold">Due</th>
                     <th className="px-4 py-3 font-semibold">Vendor</th>
-                    <th className="px-4 py-3 text-right font-semibold">Invoiced ({periodLabel})</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
                     <th className="px-4 py-3 text-center font-semibold">Action</th>
                   </tr>
@@ -611,7 +610,9 @@ function CostsPage() {
                       <tr key={c.id} className="border-b border-border/60 last:border-0">
                         <td className="px-4 py-3 font-medium">{c.name}</td>
                         <td className="px-4 py-3 text-muted-foreground">{c.category}</td>
-                        <td className="px-4 py-3 text-right tabular-nums font-semibold">{eur(c.amount)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums font-semibold text-teal">
+                          {invoicedFor(c.vendor) > 0 ? eur(invoicedFor(c.vendor)) : "—"}
+                        </td>
                         <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{c.due_day}</td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {editVendorId === c.id ? (
@@ -651,9 +652,6 @@ function CostsPage() {
                               <Pencil className="h-3 w-3" />
                             </button>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-teal">
-                          {invoicedFor(c.vendor) > 0 ? eur(invoicedFor(c.vendor)) : "—"}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_BADGE[status]}`}>
