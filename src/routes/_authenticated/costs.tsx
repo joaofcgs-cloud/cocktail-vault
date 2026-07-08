@@ -753,6 +753,70 @@ function CostsPage() {
   );
 }
 
+function PeriodControl({
+  periodMode,
+  setPeriodMode,
+  selMonth,
+  setSelMonth,
+  selYear,
+  setSelYear,
+  monthNames,
+  yearOptions,
+}: {
+  periodMode: "month" | "year";
+  setPeriodMode: (m: "month" | "year") => void;
+  selMonth: number;
+  setSelMonth: (m: number) => void;
+  selYear: number;
+  setSelYear: (y: number) => void;
+  monthNames: string[];
+  yearOptions: number[];
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex gap-1 rounded-xl bg-secondary p-1">
+        {(["month", "year"] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setPeriodMode(m)}
+            className={`h-9 shrink-0 rounded-lg px-4 text-sm font-semibold capitalize transition-colors ${
+              periodMode === m ? "bg-card text-foreground shadow" : "text-muted-foreground"
+            }`}
+          >
+            By {m}
+          </button>
+        ))}
+      </div>
+      {periodMode === "month" && (
+        <Select value={String(selMonth)} onValueChange={(v) => setSelMonth(Number(v))}>
+          <SelectTrigger className="h-11 w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {monthNames.map((m, i) => (
+              <SelectItem key={m} value={String(i + 1)}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      <Select value={String(selYear)} onValueChange={(v) => setSelYear(Number(v))}>
+        <SelectTrigger className="h-11 w-32">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {yearOptions.map((y) => (
+            <SelectItem key={y} value={String(y)}>
+              {y}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function MiniKpi({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
     <Card className="border-border bg-card p-4">
