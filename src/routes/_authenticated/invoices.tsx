@@ -198,10 +198,37 @@ function InvoicesPage() {
           items: itemsToText(rows) || null,
           receipt_url,
           created_by: user?.id,
+          category: category || null,
+          subcategory: subcategory || null,
         })
         .select("id")
         .single();
       if (error) throw error;
+
+      // Learn: remember this supplier's category for future auto-categorisation.
+      if (category && vendor.trim()) {
+        const key = vendorKey(vendor);
+        const existing = learned.find((l) => l.vendor_key === key);
+        if (existing) {
+          await db
+            .from("vendor_categories")
+            .update({
+              vendor: vendor.trim(),
+              category,
+              subcategory: subcategory || null,
+              hits: (existing.hits ?? 1) + 1,
+            })
+            .eq("vendor_key", key);
+        } else {
+          await db.from("vendor_categories").insert({
+            vendor_key: key,
+            vendor: vendor.trim(),
+            category,
+            subcategory: subcategory || null,
+          });
+        }
+        qc.invalidateQueries({ queryKey: ["vendor_categories"] });
+      }
 
       // Auto-update stock for confirmed, matched line items
       const stockRows = rows.filter((r) => r.addStock && r.inventoryId && r.qty > 0);
