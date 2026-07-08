@@ -375,7 +375,23 @@ function StaffPage() {
 
       {tab === "Payroll" && (
         <>
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              className="h-11 rounded-lg border border-border bg-background px-3 text-sm"
+            >
+              <option value="all">All periods</option>
+              {periods.map((p) => {
+                const [y, m] = p.split("-");
+                const label = new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+                return (
+                  <option key={p} value={p}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
             <Button variant="outline" onClick={exportPayroll} className="h-11 gap-2">
               <Download className="h-4 w-4" /> Export CSV
             </Button>
@@ -397,7 +413,7 @@ function StaffPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {payroll.map((p) => {
+                  {filteredPayroll.map((p) => {
                     const s = byId[p.staff_id ?? ""];
                     return (
                       <tr key={p.id} className="border-b border-border/60 last:border-0">
@@ -413,7 +429,7 @@ function StaffPage() {
                       </tr>
                     );
                   })}
-                  {payroll.length === 0 && (
+                  {filteredPayroll.length === 0 && (
                     <tr>
                       <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                         No payroll records yet.
