@@ -488,11 +488,11 @@ function StaffPage() {
             <span className="text-lg font-black text-pink">{eur(totals.tips)}</span>
           </div>
           <div className="space-y-3">
-            {[...payroll]
+            {[...filteredPayroll]
               .sort((a, b) => b.tips - a.tips)
               .map((p) => {
                 const s = byId[p.staff_id ?? ""];
-                const max = Math.max(...payroll.map((x) => x.tips), 1);
+                const max = Math.max(...filteredPayroll.map((x) => x.tips), 1);
                 return (
                   <div key={p.id}>
                     <div className="mb-1 flex items-baseline justify-between gap-2">
