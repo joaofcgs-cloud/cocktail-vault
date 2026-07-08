@@ -78,6 +78,9 @@ function InvoicesPage() {
   const [vendor, setVendor] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [total, setTotal] = useState("");
+  const [category, setCategory] = useState("");
+  const [subcategory, setSubcategory] = useState("");
+  const [autoCategorized, setAutoCategorized] = useState(false);
   const [rows, setRows] = useState<LineRow[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -128,6 +131,9 @@ function InvoicesPage() {
     setVendor("");
     setDate(new Date().toISOString().slice(0, 10));
     setTotal("");
+    setCategory("");
+    setSubcategory("");
+    setAutoCategorized(false);
     setRows([]);
     setFile(null);
   }
