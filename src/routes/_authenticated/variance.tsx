@@ -19,6 +19,63 @@ interface Row {
   discrepancy: number;
 }
 
+// Parse a Portuguese SAF-T (PT) XML file and aggregate quantity sold per product.
+function parseSaft(text: string): Row[] {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.querySelector("parsererror")) return [];
+
+  // Namespace-agnostic tag lookup (SAF-T files declare a default namespace).
+  const localName = (el: Element, name: string) =>
+    Array.from(el.children).filter(
+      (c) => c.localName === name || c.nodeName === name,
+    );
+  const firstText = (el: Element, name: string) =>
+    localName(el, name)[0]?.textContent?.trim() ?? "";
+
+  // Optional product master list for nicer names (ProductCode -> Description).
+  const nameByCode = new Map<string, string>();
+  Array.from(doc.getElementsByTagName("*"))
+    .filter((el) => el.localName === "Product")
+    .forEach((p) => {
+      const code = firstText(p, "ProductCode");
+      const desc = firstText(p, "ProductDescription");
+      if (code && desc) nameByCode.set(code, desc);
+    });
+
+  // Aggregate quantities across all sales-invoice lines.
+  const totals = new Map<string, number>();
+  const lines = Array.from(doc.getElementsByTagName("*")).filter(
+    (el) => el.localName === "Line" && el.closest,
+  );
+  lines.forEach((line) => {
+    // Only count lines that belong to SalesInvoices (skip stock movements etc.).
+    let anc: Element | null = line.parentElement;
+    let inSales = false;
+    while (anc) {
+      if (anc.localName === "SalesInvoices" || anc.localName === "Invoice") {
+        inSales = true;
+        break;
+      }
+      anc = anc.parentElement;
+    }
+    if (!inSales) return;
+
+    const code = firstText(line, "ProductCode");
+    const desc = firstText(line, "ProductDescription");
+    const label = desc || nameByCode.get(code) || code || "Unknown";
+    const qty = parseFloat(firstText(line, "Quantity")) || 0;
+    if (!label || qty === 0) return;
+    totals.set(label, (totals.get(label) ?? 0) + qty);
+  });
+
+  return Array.from(totals.entries()).map(([product, actual]) => ({
+    product,
+    expected: actual,
+    actual,
+    discrepancy: 0,
+  }));
+}
+
 function parseCsv(text: string): Row[] {
   const lines = text.trim().split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
@@ -55,7 +112,11 @@ function VariancePage() {
       return;
     }
     const text = await file.text();
-    const parsed = parseCsv(text);
+    const isXml =
+      /\.xml$/i.test(file.name) ||
+      /^\s*<\?xml/.test(text) ||
+      /<AuditFile/i.test(text);
+    const parsed = isXml ? parseSaft(text) : parseCsv(text);
     if (parsed.length === 0) {
       toast.error("Couldn't read any rows from that file.");
       return;
@@ -102,12 +163,12 @@ function VariancePage() {
             Upload your XD sales export to see variance analysis
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Drag & drop or tap to choose a CSV file
+            Drag & drop or tap to choose a CSV or SAF-T (PT) XML file
           </p>
         </div>
         <input
           type="file"
-          accept=".csv,text/csv,.xlsx,application/vnd.ms-excel"
+          accept=".csv,text/csv,.xlsx,application/vnd.ms-excel,.xml,text/xml,application/xml"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
