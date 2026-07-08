@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { db, type ServiceCost, type ServiceCostPayment } from "@/lib/db";
+import { db, type ServiceCost, type ServiceCostPayment, type Invoice } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,7 @@ function CostsPage() {
   const now = new Date();
   const [selMonth, setSelMonth] = useState(now.getMonth() + 1);
   const [selYear, setSelYear] = useState(now.getFullYear());
+  const [periodMode, setPeriodMode] = useState<"month" | "year">("month");
   const [editVendorId, setEditVendorId] = useState<string | null>(null);
   const [editVendorVal, setEditVendorVal] = useState("");
   const [savingVendor, setSavingVendor] = useState(false);
