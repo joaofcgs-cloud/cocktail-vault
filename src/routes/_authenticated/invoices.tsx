@@ -638,6 +638,41 @@ function InvoicesPage() {
                           />
                         </label>
                       </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] uppercase text-muted-foreground">Category</span>
+                          <select
+                            value={r.category}
+                            onChange={(e) =>
+                              updateRow(i, { category: e.target.value, subcategory: "" })
+                            }
+                            className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                          >
+                            <option value="">— Select —</option>
+                            {CATEGORIES.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase text-muted-foreground">Subcategory</span>
+                          <select
+                            value={r.subcategory}
+                            disabled={!r.category}
+                            onChange={(e) => updateRow(i, { subcategory: e.target.value })}
+                            className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm disabled:opacity-50"
+                          >
+                            <option value="">— Select —</option>
+                            {subcategoriesFor(r.category).map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   ))}
 
