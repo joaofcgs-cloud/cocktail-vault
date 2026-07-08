@@ -297,26 +297,60 @@ function CostsPage() {
     }
   }
 
-  function exportCsv() {
-    const headers = ["Service", "Category", "Amount", "Due Day", "Vendor", "Status"];
-    const rows = costs.map((c) => [
-      c.name,
-      c.category,
-      c.amount.toFixed(2),
-      c.due_day,
-      c.vendor ?? "",
-      payByCost[c.id]?.status ?? "pending",
-    ]);
-    const csv = [headers, ...rows]
+  const periodLabel =
+    periodMode === "month" ? `${MONTH_NAMES[selMonth - 1]}-${selYear}` : `${selYear}`;
+
+  function downloadCsv(rows: (string | number)[][], filename: string) {
+    const csv = rows
       .map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","))
       .join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "service-costs.csv";
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function exportCsv() {
+    const headers = [
+      "Service",
+      "Category",
+      "Amount",
+      "Due Day",
+      "Vendor",
+      `Invoiced (${periodLabel})`,
+      "Status",
+    ];
+    const rows = listed.map((c) => [
+      c.name,
+      c.category,
+      c.amount.toFixed(2),
+      c.due_day,
+      c.vendor ?? "",
+      invoicedFor(c.vendor).toFixed(2),
+      payByCost[c.id]?.status ?? "pending",
+    ]);
+    downloadCsv([headers, ...rows], `service-costs-${periodLabel}.csv`);
+  }
+
+  function exportSupplierCsv() {
+    const headers = ["Vendor", "Service", "Category", "Expected", "Paid", "Status"];
+    const rows: (string | number)[][] = [];
+    for (const g of bySupplier) {
+      for (const it of g.items) {
+        rows.push([
+          g.supplier,
+          it.name,
+          it.category,
+          it.expected.toFixed(2),
+          it.paid.toFixed(2),
+          it.status,
+        ]);
+      }
+    }
+    downloadCsv([headers, ...rows], `costs-by-supplier-${MONTH_NAMES[selMonth - 1]}-${selYear}.csv`);
   }
 
   return (
