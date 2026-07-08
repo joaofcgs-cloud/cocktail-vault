@@ -80,7 +80,6 @@ function StaffPage() {
   const [upMonth, setUpMonth] = useState(now.getMonth() + 1);
   const [upYear, setUpYear] = useState(now.getFullYear());
   const [busy, setBusy] = useState(false);
-  const [autoRead, setAutoRead] = useState(true);
   const runScan = useServerFn(scanPayroll);
 
   // Period filter for payroll views (month/year)
@@ -193,18 +192,11 @@ function StaffPage() {
     setBusy(true);
     try {
       const safeName = file.name.replace(/[^\w.\-]/g, "_");
-      // When auto-read is on, read the invoice first so we store its real month/year
-      let invMonth = upMonth;
-      let invYear = upYear;
-      let parsedPeriod: { month: number; year: number } | null = null;
-      if (autoRead) {
-        toast.info("Reading payslip with AI…");
-        parsedPeriod = await importPayroll(file);
-        if (parsedPeriod) {
-          invMonth = parsedPeriod.month;
-          invYear = parsedPeriod.year;
-        }
-      }
+      // Always read the invoice first so we store its real month/year
+      toast.info("Reading payslip with AI…");
+      const parsedPeriod = await importPayroll(file);
+      const invMonth = parsedPeriod ? parsedPeriod.month : upMonth;
+      const invYear = parsedPeriod ? parsedPeriod.year : upYear;
       const path = `${user.id}/payroll/${invYear}-${String(invMonth).padStart(2, "0")}-${Date.now()}-${safeName}`;
       const { error: upErr } = await supabase.storage
         .from("receipts")
@@ -527,7 +519,7 @@ function StaffPage() {
             <p className="mb-4 text-xs text-muted-foreground">
               Accepts PDF or image (JPG/PNG) files.
             </p>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">
                   Employee
@@ -545,34 +537,10 @@ function StaffPage() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  Month
-                </label>
-                <select
-                  value={upMonth}
-                  onChange={(e) => setUpMonth(Number(e.target.value))}
-                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                >
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={m}>
-                      {new Date(2000, m - 1).toLocaleString("en", { month: "long" })}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  Year
-                </label>
-                <input
-                  type="number"
-                  value={upYear}
-                  onChange={(e) => setUpYear(Number(e.target.value))}
-                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                />
-              </div>
             </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              The month and year are detected automatically from each invoice.
+            </p>
             <input
               ref={fileRef}
               type="file"
@@ -592,16 +560,10 @@ function StaffPage() {
               <Upload className="h-4 w-4" />
               {busy ? "Uploading…" : "Upload PDF / JPG"}
             </Button>
-            <label className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={autoRead}
-                onChange={(e) => setAutoRead(e.target.checked)}
-                className="h-4 w-4 accent-teal"
-              />
+            <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
               <Sparkles className="h-4 w-4 text-teal" />
-              Auto-read with AI and fill staff &amp; payroll
-            </label>
+              Each invoice is read with AI to fill staff, payroll, and its month/year automatically.
+            </p>
           </Card>
 
           <Card className="border-border bg-card p-0">
