@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { db, type ServiceCost, type ServiceCostPayment, type Invoice } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
@@ -13,8 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { eur } from "@/lib/format";
-import { Download, Lock, CheckCircle2, Clock, AlertOctagon, Check, Pencil } from "lucide-react";
+import { Download, Lock, CheckCircle2, Clock, AlertOctagon, Check, Pencil, Receipt } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/costs")({
@@ -56,6 +63,7 @@ function CostsPage() {
   const [editVendorId, setEditVendorId] = useState<string | null>(null);
   const [editVendorVal, setEditVendorVal] = useState("");
   const [savingVendor, setSavingVendor] = useState(false);
+  const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
 
   const { data: costs = [] } = useQuery({
     queryKey: ["service_costs"],
@@ -138,6 +146,23 @@ function CostsPage() {
   const invoicedFor = (vendor: string | null) =>
     vendor ? invoiceTotalByVendor.get(vendor.trim()) ?? 0 : 0;
 
+  // Invoices for the currently selected supplier, filtered by the active period.
+  const supplierInvoices = useMemo(() => {
+    if (!selectedSupplier) return [];
+    return invoices
+      .filter((inv) => {
+        if (!inv.vendor) return false;
+        const d = inv.date ? new Date(inv.date) : null;
+        if (!d || Number.isNaN(d.getTime())) return false;
+        if (d.getFullYear() !== selYear) return false;
+        if (periodMode === "month" && d.getMonth() + 1 !== selMonth) return false;
+        return inv.vendor.trim().toLowerCase() === selectedSupplier.trim().toLowerCase();
+      })
+      .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+  }, [invoices, selectedSupplier, periodMode, selMonth, selYear]);
+
+  const supplierInvoicesTotal = supplierInvoices.reduce((s, inv) => s + (inv.total ?? 0), 0);
+
   async function saveVendor(costId: string) {
     const name = editVendorVal.trim();
     setSavingVendor(true);
@@ -155,6 +180,15 @@ function CostsPage() {
     } finally {
       setSavingVendor(false);
     }
+  }
+
+  async function openReceipt(path: string) {
+    const { data, error } = await supabase.storage.from("receipts").createSignedUrl(path, 60);
+    if (error || !data) {
+      toast.error("Could not open receipt.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank");
   }
 
   const payByCost = useMemo(
@@ -637,18 +671,29 @@ function CostsPage() {
                               </Button>
                             </div>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditVendorId(c.id);
-                                setEditVendorVal(c.vendor ?? "");
-                              }}
-                              className="inline-flex items-center gap-1.5 rounded px-1 -mx-1 text-left hover:bg-secondary/50"
-                              title="Click to set vendor"
-                            >
-                              {c.vendor || <span className="italic opacity-70">Set vendor</span>}
-                              <Pencil className="h-3 w-3" />
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => c.vendor && setSelectedSupplier(c.vendor)}
+                                className={`inline-flex items-center gap-1.5 rounded px-1 -mx-1 text-left ${c.vendor ? "hover:bg-secondary/50 hover:text-foreground" : ""}`}
+                                title={c.vendor ? "Click to view uploaded invoices" : "Click to set vendor"}
+                                disabled={!c.vendor}
+                              >
+                                {c.vendor || <span className="italic opacity-70">Set vendor</span>}
+                                {c.vendor && <Receipt className="h-3 w-3" />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditVendorId(c.id);
+                                  setEditVendorVal(c.vendor ?? "");
+                                }}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                                title="Edit vendor"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                            </div>
                           )}
                         </td>
                         <td className="px-4 py-3">
@@ -745,6 +790,65 @@ function CostsPage() {
           )}
         </div>
       )}
+      <Dialog open={!!selectedSupplier} onOpenChange={(v) => !v && setSelectedSupplier(null)}>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedSupplier ? `Invoices — ${selectedSupplier}` : "Invoices"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                {periodMode === "month"
+                  ? `${MONTH_NAMES[selMonth - 1]} ${selYear}`
+                  : `${selYear}`}
+              </p>
+              <p className="text-lg font-black text-teal">{eur(supplierInvoicesTotal)}</p>
+            </div>
+            {supplierInvoices.length === 0 ? (
+              <Card className="border-border bg-card p-6 text-center text-sm text-muted-foreground">
+                No invoices for this supplier in the selected period.
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {supplierInvoices.map((inv) => (
+                  <Card key={inv.id} className="border-border bg-card p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold">{inv.date || "No date"}</p>
+                        {inv.category && (
+                          <p className="text-xs text-muted-foreground">
+                            {inv.subcategory ? `${inv.category} > ${inv.subcategory}` : inv.category}
+                          </p>
+                        )}
+                        {inv.items && (
+                          <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">
+                            {inv.items}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="font-black text-teal">{eur(inv.total)}</p>
+                        {inv.receipt_url && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-2 h-8 gap-1.5"
+                            onClick={() => openReceipt(inv.receipt_url!)}
+                          >
+                            <Receipt className="h-3.5 w-3.5" /> Receipt
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
