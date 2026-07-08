@@ -676,12 +676,58 @@ function InvoicesPage() {
         </div>
       </Card>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setFilterCat("all")}
+          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+            filterCat === "all"
+              ? "bg-teal text-primary-foreground"
+              : "bg-secondary text-muted-foreground hover:bg-secondary/70"
+          }`}
+        >
+          All ({invoices.length})
+        </button>
+        {CATEGORIES.map((c) => {
+          const count = invoices.filter((i) => i.category === c).length;
+          if (count === 0) return null;
+          return (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setFilterCat(c)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                filterCat === c
+                  ? "bg-teal text-primary-foreground"
+                  : "bg-secondary text-muted-foreground hover:bg-secondary/70"
+              }`}
+            >
+              {c} ({count})
+            </button>
+          );
+        })}
+        {invoices.some((i) => !i.category) && (
+          <button
+            type="button"
+            onClick={() => setFilterCat("__uncat")}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+              filterCat === "__uncat"
+                ? "bg-teal text-primary-foreground"
+                : "bg-secondary text-muted-foreground hover:bg-secondary/70"
+            }`}
+          >
+            Uncategorised ({invoices.filter((i) => !i.category).length})
+          </button>
+        )}
+      </div>
+
       <Card className="border-border bg-card p-0">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-4 py-3 font-semibold">Vendor</th>
+                <th className="px-4 py-3 font-semibold">Category</th>
                 <th className="px-4 py-3 font-semibold">Date</th>
                 <th className="px-4 py-3 text-right font-semibold">Total</th>
                 <th className="px-4 py-3 font-semibold">Items</th>
@@ -689,7 +735,7 @@ function InvoicesPage() {
               </tr>
             </thead>
             <tbody>
-              {invoices.map((inv) => (
+              {shownInvoices.map((inv) => (
                 <tr
                   key={inv.id}
                   className="border-b border-border/60 last:border-0"
@@ -733,6 +779,20 @@ function InvoicesPage() {
                       </button>
                     )}
                   </td>
+                  <td className="px-4 py-3">
+                    {inv.category ? (
+                      <div className="flex flex-col">
+                        <span className="font-medium">{inv.category}</span>
+                        {inv.subcategory && (
+                          <span className="text-xs text-muted-foreground">
+                            {inv.subcategory}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {inv.date ?? "—"}
                   </td>
@@ -756,13 +816,13 @@ function InvoicesPage() {
                   </td>
                 </tr>
               ))}
-              {invoices.length === 0 && (
+              {shownInvoices.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-10 text-center text-muted-foreground"
                   >
-                    No invoices yet. Add your first one.
+                    No invoices in this category yet.
                   </td>
                 </tr>
               )}
