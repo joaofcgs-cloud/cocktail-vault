@@ -250,6 +250,66 @@ export type Database = {
           },
         ]
       }
+      food_inventory: {
+        Row: {
+          category: string
+          cost_per_gram: number
+          cost_per_unit: number
+          created_at: string
+          current_stock: number
+          expiry_date: string | null
+          id: string
+          last_invoice_id: string | null
+          last_purchase_date: string | null
+          name: string
+          par_level: number
+          shelf_life_days: number | null
+          status: string
+          supplier_id: string | null
+          unit_cost: number
+          unit_type: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          cost_per_gram?: number
+          cost_per_unit?: number
+          created_at?: string
+          current_stock?: number
+          expiry_date?: string | null
+          id?: string
+          last_invoice_id?: string | null
+          last_purchase_date?: string | null
+          name: string
+          par_level?: number
+          shelf_life_days?: number | null
+          status?: string
+          supplier_id?: string | null
+          unit_cost?: number
+          unit_type?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          cost_per_gram?: number
+          cost_per_unit?: number
+          created_at?: string
+          current_stock?: number
+          expiry_date?: string | null
+          id?: string
+          last_invoice_id?: string | null
+          last_purchase_date?: string | null
+          name?: string
+          par_level?: number
+          shelf_life_days?: number | null
+          status?: string
+          supplier_id?: string | null
+          unit_cost?: number
+          unit_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       inventory: {
         Row: {
           abv: number
@@ -480,6 +540,90 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      prep_ingredients: {
+        Row: {
+          amount: number
+          amount_unit: string
+          cost: number
+          created_at: string
+          food_inventory_id: string | null
+          id: string
+          prep_recipe_id: string
+        }
+        Insert: {
+          amount?: number
+          amount_unit?: string
+          cost?: number
+          created_at?: string
+          food_inventory_id?: string | null
+          id?: string
+          prep_recipe_id: string
+        }
+        Update: {
+          amount?: number
+          amount_unit?: string
+          cost?: number
+          created_at?: string
+          food_inventory_id?: string | null
+          id?: string
+          prep_recipe_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prep_ingredients_food_inventory_id_fkey"
+            columns: ["food_inventory_id"]
+            isOneToOne: false
+            referencedRelation: "food_inventory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prep_ingredients_prep_recipe_id_fkey"
+            columns: ["prep_recipe_id"]
+            isOneToOne: false
+            referencedRelation: "prep_recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prep_recipes: {
+        Row: {
+          cost_per_ml: number
+          created_at: string
+          id: string
+          instructions: string | null
+          name: string
+          shelf_life_days: number | null
+          total_cost: number
+          updated_at: string
+          yield_amount: number
+          yield_unit: string
+        }
+        Insert: {
+          cost_per_ml?: number
+          created_at?: string
+          id?: string
+          instructions?: string | null
+          name: string
+          shelf_life_days?: number | null
+          total_cost?: number
+          updated_at?: string
+          yield_amount?: number
+          yield_unit?: string
+        }
+        Update: {
+          cost_per_ml?: number
+          created_at?: string
+          id?: string
+          instructions?: string | null
+          name?: string
+          shelf_life_days?: number | null
+          total_cost?: number
+          updated_at?: string
+          yield_amount?: number
+          yield_unit?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {

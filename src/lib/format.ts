@@ -1,4 +1,4 @@
-import type { InventoryStatus } from "@/lib/db";
+import type { InventoryStatus, FoodStatus } from "@/lib/db";
 
 export const eur = (n: number) =>
   new Intl.NumberFormat("en-IE", {
@@ -25,6 +25,14 @@ export const statusBadge: Record<InventoryStatus, string> = {
   LOW: "bg-orange/15 text-orange",
   OK: "bg-teal/15 text-teal",
   GOOD: "bg-green/15 text-green",
+};
+
+export const foodStatusBadge: Record<FoodStatus, string> = {
+  OUT: "bg-red/15 text-red",
+  LOW: "bg-orange/15 text-orange",
+  OK: "bg-teal/15 text-teal",
+  GOOD: "bg-green/15 text-green",
+  EXPIRING: "bg-purple/15 text-purple",
 };
 
 // margin color thresholds

@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export type InventoryStatus = "OUT" | "LOW" | "OK" | "GOOD";
+export type FoodStatus = "OUT" | "LOW" | "OK" | "GOOD" | "EXPIRING";
 
 export interface InventoryItem {
   id: string;
@@ -14,6 +15,49 @@ export interface InventoryItem {
   cost_per_ml: number;
   pours_per_bottle: number;
   status: InventoryStatus;
+  created_at: string;
+}
+
+export interface FoodItem {
+  id: string;
+  name: string;
+  category: string;
+  unit_type: string;
+  current_stock: number;
+  par_level: number;
+  unit_cost: number;
+  supplier_id: string | null;
+  last_invoice_id: string | null;
+  last_purchase_date: string | null;
+  shelf_life_days: number | null;
+  expiry_date: string | null;
+  cost_per_gram: number;
+  cost_per_unit: number;
+  status: FoodStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PrepRecipe {
+  id: string;
+  name: string;
+  yield_amount: number;
+  yield_unit: string;
+  shelf_life_days: number | null;
+  instructions: string | null;
+  total_cost: number;
+  cost_per_ml: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PrepIngredient {
+  id: string;
+  prep_recipe_id: string;
+  food_inventory_id: string | null;
+  amount: number;
+  amount_unit: string;
+  cost: number;
   created_at: string;
 }
 
