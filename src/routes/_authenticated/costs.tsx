@@ -199,9 +199,12 @@ function CostsPage() {
   const yearOptions = useMemo(() => {
     const set = new Set<number>([now.getFullYear()]);
     payments.forEach((p) => set.add(p.year));
-    costs.length; // ensure recompute when costs load
+    invoices.forEach((inv) => {
+      const d = inv.date ? new Date(inv.date) : null;
+      if (d && !Number.isNaN(d.getTime())) set.add(d.getFullYear());
+    });
     return [...set].sort((a, b) => b - a);
-  }, [payments, now]);
+  }, [payments, invoices, now]);
 
   const bySupplier = useMemo(() => {
     const periodPay = new Map(
