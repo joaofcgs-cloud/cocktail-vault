@@ -75,6 +75,9 @@ function InvoicesPage() {
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   const runScan = useServerFn(scanReceipt);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editVendor, setEditVendor] = useState("");
+  const [savingVendor, setSavingVendor] = useState(false);
 
   const { data: invoices = [] } = useQuery({
     queryKey: ["invoices"],
@@ -87,6 +90,31 @@ function InvoicesPage() {
       return data;
     },
   });
+
+  // Distinct, sorted list of previously used suppliers for autocomplete.
+  const vendorOptions = Array.from(
+    new Set(invoices.map((i) => i.vendor?.trim()).filter(Boolean) as string[]),
+  ).sort((a, b) => a.localeCompare(b));
+
+  async function saveVendorEdit(id: string) {
+    const name = editVendor.trim();
+    if (!name) {
+      toast.error("Vendor is required.");
+      return;
+    }
+    setSavingVendor(true);
+    try {
+      const { error } = await db.from("invoices").update({ vendor: name }).eq("id", id);
+      if (error) throw error;
+      toast.success("Vendor updated.");
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      setEditingId(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update vendor");
+    } finally {
+      setSavingVendor(false);
+    }
+  }
 
   function reset() {
     setVendor("");
