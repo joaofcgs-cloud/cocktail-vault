@@ -83,6 +83,19 @@ function StaffPage() {
   const [autoRead, setAutoRead] = useState(true);
   const runScan = useServerFn(scanPayroll);
 
+  // Period filter for payroll views (month/year)
+  const [period, setPeriod] = useState<string>("all");
+  const periods = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of payroll) set.add(`${p.year}-${String(p.month).padStart(2, "0")}`);
+    return [...set].sort((a, b) => b.localeCompare(a));
+  }, [payroll]);
+  const filteredPayroll = useMemo(() => {
+    if (period === "all") return payroll;
+    const [y, m] = period.split("-").map(Number);
+    return payroll.filter((p) => p.year === y && p.month === m);
+  }, [payroll, period]);
+
   function fileToDataUrl(f: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
