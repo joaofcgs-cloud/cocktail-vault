@@ -516,7 +516,7 @@ function InvoicesPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="category">Category</Label>
+                    <Label htmlFor="category">Overall category</Label>
                     <select
                       id="category"
                       value={category}
