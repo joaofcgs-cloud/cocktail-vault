@@ -16,6 +16,8 @@ export interface ParsedReceipt {
   date: string;
   items: { product: string; qty: number; unit_price: number; total: number }[];
   grand_total: number;
+  category: string;
+  subcategory: string;
 }
 
 export const scanReceipt = createServerFn({ method: "POST" })
@@ -34,7 +36,10 @@ export const scanReceipt = createServerFn({ method: "POST" })
         "Skip items whose quantity is 0 (they are catalogue/price-list rows, not purchases).",
         "Numbers may use a comma as the decimal separator and a dot/space as thousands separator (European format) — normalise them to plain decimals with a dot.",
         "grand_total: the final payable TOTAL of the invoice (the 'TOTAL' including tax), as a number.",
-        'Return ONLY this JSON: {"vendor":"","date":"","items":[{"product":"","qty":0,"unit_price":0,"total":0}],"grand_total":0}',
+        "Classify the whole invoice into ONE category and ONE subcategory from this taxonomy (use the exact spelling), based on the vendor and the line items:",
+        CATEGORY_GUIDE,
+        "category: the best-fitting top-level category. subcategory: the best-fitting subcategory within that category. If unsure, pick the closest match.",
+        'Return ONLY this JSON: {"vendor":"","date":"","items":[{"product":"","qty":0,"unit_price":0,"total":0}],"grand_total":0,"category":"","subcategory":""}',
       ].join("\n");
 
     const userContent: unknown[] = [{ type: "text", text: instruction }];
@@ -104,5 +109,7 @@ export const scanReceipt = createServerFn({ method: "POST" })
       date: parsed.date ?? new Date().toISOString().slice(0, 10),
       items: Array.isArray(parsed.items) ? parsed.items : [],
       grand_total: Number(parsed.grand_total) || 0,
+      category: parsed.category ?? "",
+      subcategory: parsed.subcategory ?? "",
     };
   });
