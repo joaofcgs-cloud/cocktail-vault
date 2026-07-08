@@ -344,7 +344,27 @@ function InvoicesPage() {
       setRows(matched);
       setFile(f);
       setOpen(true);
-      toast.success("File read — review matches and save.");
+
+      // Categorise: prefer what we've learned for this supplier, else use AI.
+      const key = vendorKey(parsed.vendor || "");
+      const known = key ? learned.find((l) => l.vendor_key === key) : undefined;
+      let cat = "";
+      let sub = "";
+      if (known) {
+        cat = normalizeCategory(known.category) ?? "";
+        sub = normalizeSubcategory(cat, known.subcategory) ?? "";
+      } else {
+        cat = normalizeCategory(parsed.category) ?? "";
+        sub = normalizeSubcategory(cat, parsed.subcategory) ?? "";
+      }
+      setCategory(cat);
+      setSubcategory(sub);
+      setAutoCategorized(!!cat);
+      toast.success(
+        cat
+          ? `File read — suggested category: ${cat}. Review and save.`
+          : "File read — review matches and save.",
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Scan failed");
     } finally {
