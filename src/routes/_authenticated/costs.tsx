@@ -85,7 +85,9 @@ function CostsPage() {
     queryFn: async (): Promise<string[]> => {
       const { data, error } = await db.from("invoices").select("vendor");
       if (error) throw error;
-      return (data ?? []).map((r) => r.vendor).filter(Boolean) as string[];
+      return (data ?? [])
+        .map((r: { vendor: string | null }) => r.vendor)
+        .filter(Boolean) as string[];
     },
     enabled: isOwner,
   });
