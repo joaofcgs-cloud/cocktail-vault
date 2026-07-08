@@ -496,7 +496,45 @@ function CostsPage() {
                         <td className="px-4 py-3 text-muted-foreground">{c.category}</td>
                         <td className="px-4 py-3 text-right tabular-nums font-semibold">{eur(c.amount)}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{c.due_day}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{c.vendor}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {editVendorId === c.id ? (
+                            <div className="flex items-center gap-1.5">
+                              <Input
+                                value={editVendorVal}
+                                onChange={(e) => setEditVendorVal(e.target.value)}
+                                list="cost-vendor-suggestions"
+                                autoComplete="off"
+                                autoFocus
+                                className="h-8 w-44 text-sm"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") saveVendor(c.id);
+                                  if (e.key === "Escape") setEditVendorId(null);
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                className="h-8 px-2"
+                                disabled={savingVendor}
+                                onClick={() => saveVendor(c.id)}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditVendorId(c.id);
+                                setEditVendorVal(c.vendor ?? "");
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded px-1 -mx-1 text-left hover:bg-secondary/50"
+                              title="Click to set vendor"
+                            >
+                              {c.vendor || <span className="italic opacity-70">Set vendor</span>}
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_BADGE[status]}`}>
                             {status}
