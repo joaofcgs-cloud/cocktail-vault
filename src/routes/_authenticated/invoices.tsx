@@ -89,6 +89,7 @@ function InvoicesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editVendor, setEditVendor] = useState("");
   const [savingVendor, setSavingVendor] = useState(false);
+  const [filterCat, setFilterCat] = useState<string>("all");
 
   const { data: invoices = [] } = useQuery({
     queryKey: ["invoices"],
@@ -99,6 +100,22 @@ function InvoicesPage() {
         .order("date", { ascending: false });
       if (error) throw error;
       return data;
+    },
+  });
+
+  // Learned supplier → category mappings (grows as invoices are saved).
+  const { data: learned = [] } = useQuery({
+    queryKey: ["vendor_categories"],
+    queryFn: async () => {
+      const { data, error } = await db.from("vendor_categories").select("*");
+      if (error) throw error;
+      return data as {
+        vendor_key: string;
+        vendor: string;
+        category: string;
+        subcategory: string | null;
+        hits: number;
+      }[];
     },
   });
 
