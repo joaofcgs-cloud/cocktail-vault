@@ -68,6 +68,8 @@ interface LineRow {
   inventoryId: string | null;
   confidence: number;
   addStock: boolean;
+  category: string;
+  subcategory: string;
 }
 
 function InvoicesPage() {
