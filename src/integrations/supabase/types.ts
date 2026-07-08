@@ -261,32 +261,38 @@ export type Database = {
       }
       invoices: {
         Row: {
+          category: string | null
           created_at: string
           created_by: string | null
           date: string | null
           id: string
           items: string | null
           receipt_url: string | null
+          subcategory: string | null
           total: number
           vendor: string
         }
         Insert: {
+          category?: string | null
           created_at?: string
           created_by?: string | null
           date?: string | null
           id?: string
           items?: string | null
           receipt_url?: string | null
+          subcategory?: string | null
           total?: number
           vendor: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           created_by?: string | null
           date?: string | null
           id?: string
           items?: string | null
           receipt_url?: string | null
+          subcategory?: string | null
           total?: number
           vendor?: string
         }
@@ -621,6 +627,39 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      vendor_categories: {
+        Row: {
+          category: string
+          created_at: string
+          hits: number
+          id: string
+          subcategory: string | null
+          updated_at: string
+          vendor: string
+          vendor_key: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          hits?: number
+          id?: string
+          subcategory?: string | null
+          updated_at?: string
+          vendor: string
+          vendor_key: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          hits?: number
+          id?: string
+          subcategory?: string | null
+          updated_at?: string
+          vendor?: string
+          vendor_key?: string
         }
         Relationships: []
       }
