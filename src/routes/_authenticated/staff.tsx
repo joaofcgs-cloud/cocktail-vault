@@ -527,7 +527,7 @@ function StaffPage() {
             <p className="mb-4 text-xs text-muted-foreground">
               Accepts PDF or image (JPG/PNG) files.
             </p>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">
                   Employee
@@ -545,34 +545,10 @@ function StaffPage() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  Month
-                </label>
-                <select
-                  value={upMonth}
-                  onChange={(e) => setUpMonth(Number(e.target.value))}
-                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                >
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={m}>
-                      {new Date(2000, m - 1).toLocaleString("en", { month: "long" })}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  Year
-                </label>
-                <input
-                  type="number"
-                  value={upYear}
-                  onChange={(e) => setUpYear(Number(e.target.value))}
-                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                />
-              </div>
             </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              The month and year are detected automatically from each invoice.
+            </p>
             <input
               ref={fileRef}
               type="file"
