@@ -83,6 +83,19 @@ function StaffPage() {
   const [autoRead, setAutoRead] = useState(true);
   const runScan = useServerFn(scanPayroll);
 
+  // Period filter for payroll views (month/year)
+  const [period, setPeriod] = useState<string>("all");
+  const periods = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of payroll) set.add(`${p.year}-${String(p.month).padStart(2, "0")}`);
+    return [...set].sort((a, b) => b.localeCompare(a));
+  }, [payroll]);
+  const filteredPayroll = useMemo(() => {
+    if (period === "all") return payroll;
+    const [y, m] = period.split("-").map(Number);
+    return payroll.filter((p) => p.year === y && p.month === m);
+  }, [payroll, period]);
+
   function fileToDataUrl(f: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -238,14 +251,14 @@ function StaffPage() {
   }
 
   const totals = useMemo(() => {
-    const gross = payroll.reduce((s, p) => s + p.gross_pay, 0);
-    const net = payroll.reduce((s, p) => s + p.net_pay, 0);
-    const tips = payroll.reduce((s, p) => s + p.tips, 0);
-    const base = payroll.reduce((s, p) => s + p.base_pay, 0);
-    const subs = payroll.reduce((s, p) => s + p.meal_subsidy, 0);
-    const ded = payroll.reduce((s, p) => s + p.irs + p.social_security, 0);
+    const gross = filteredPayroll.reduce((s, p) => s + p.gross_pay, 0);
+    const net = filteredPayroll.reduce((s, p) => s + p.net_pay, 0);
+    const tips = filteredPayroll.reduce((s, p) => s + p.tips, 0);
+    const base = filteredPayroll.reduce((s, p) => s + p.base_pay, 0);
+    const subs = filteredPayroll.reduce((s, p) => s + p.meal_subsidy, 0);
+    const ded = filteredPayroll.reduce((s, p) => s + p.irs + p.social_security, 0);
     return { gross, net, tips, base, subs, ded };
-  }, [payroll]);
+  }, [filteredPayroll]);
 
   if (!isOwner) {
     return (
@@ -261,7 +274,7 @@ function StaffPage() {
 
   function exportPayroll() {
     const headers = ["Name", "Role", "Base", "Meal", "Tips", "Gross", "IRS", "SS", "Net", "Days"];
-    const rows = payroll.map((p) => {
+    const rows = filteredPayroll.map((p) => {
       const s = byId[p.staff_id ?? ""];
       return [
         s?.name ?? "—",
@@ -283,20 +296,20 @@ function StaffPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "payroll-2026-06.csv";
+    a.download = `payroll-${period === "all" ? "all" : period}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   const roleTotals = useMemo(() => {
     const map = new Map<string, number>();
-    for (const p of payroll) {
+    for (const p of filteredPayroll) {
       const s = byId[p.staff_id ?? ""];
       const role = s?.role ?? "Other";
       map.set(role, (map.get(role) ?? 0) + p.gross_pay);
     }
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
-  }, [payroll, byId]);
+  }, [filteredPayroll, byId]);
   const roleMax = roleTotals.length ? roleTotals[0][1] : 1;
 
   return (
@@ -362,7 +375,23 @@ function StaffPage() {
 
       {tab === "Payroll" && (
         <>
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              className="h-11 rounded-lg border border-border bg-background px-3 text-sm"
+            >
+              <option value="all">All periods</option>
+              {periods.map((p) => {
+                const [y, m] = p.split("-");
+                const label = new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+                return (
+                  <option key={p} value={p}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
             <Button variant="outline" onClick={exportPayroll} className="h-11 gap-2">
               <Download className="h-4 w-4" /> Export CSV
             </Button>
@@ -384,7 +413,7 @@ function StaffPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {payroll.map((p) => {
+                  {filteredPayroll.map((p) => {
                     const s = byId[p.staff_id ?? ""];
                     return (
                       <tr key={p.id} className="border-b border-border/60 last:border-0">
@@ -400,7 +429,7 @@ function StaffPage() {
                       </tr>
                     );
                   })}
-                  {payroll.length === 0 && (
+                  {filteredPayroll.length === 0 && (
                     <tr>
                       <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                         No payroll records yet.
@@ -459,11 +488,11 @@ function StaffPage() {
             <span className="text-lg font-black text-pink">{eur(totals.tips)}</span>
           </div>
           <div className="space-y-3">
-            {[...payroll]
+            {[...filteredPayroll]
               .sort((a, b) => b.tips - a.tips)
               .map((p) => {
                 const s = byId[p.staff_id ?? ""];
-                const max = Math.max(...payroll.map((x) => x.tips), 1);
+                const max = Math.max(...filteredPayroll.map((x) => x.tips), 1);
                 return (
                   <div key={p.id}>
                     <div className="mb-1 flex items-baseline justify-between gap-2">
