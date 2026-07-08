@@ -5,6 +5,7 @@ import { db, type ServiceCost, type ServiceCostPayment } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -13,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { eur } from "@/lib/format";
-import { Download, Lock, CheckCircle2, Clock, AlertOctagon } from "lucide-react";
+import { Download, Lock, CheckCircle2, Clock, AlertOctagon, Check, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/costs")({
@@ -51,6 +52,9 @@ function CostsPage() {
   const now = new Date();
   const [selMonth, setSelMonth] = useState(now.getMonth() + 1);
   const [selYear, setSelYear] = useState(now.getFullYear());
+  const [editVendorId, setEditVendorId] = useState<string | null>(null);
+  const [editVendorVal, setEditVendorVal] = useState("");
+  const [savingVendor, setSavingVendor] = useState(false);
 
   const { data: costs = [] } = useQuery({
     queryKey: ["service_costs"],
@@ -74,6 +78,51 @@ function CostsPage() {
     },
     enabled: isOwner,
   });
+
+  // Supplier suggestions: existing cost vendors + invoice vendors, for consistency.
+  const { data: invoiceVendors = [] } = useQuery({
+    queryKey: ["invoice_vendors"],
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await db.from("invoices").select("vendor");
+      if (error) throw error;
+      return (data ?? [])
+        .map((r: { vendor: string | null }) => r.vendor)
+        .filter(Boolean) as string[];
+    },
+    enabled: isOwner,
+  });
+
+  const vendorOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [
+            ...costs.map((c) => c.vendor?.trim()),
+            ...invoiceVendors.map((v) => v?.trim()),
+          ].filter(Boolean) as string[],
+        ),
+      ).sort((a, b) => a.localeCompare(b)),
+    [costs, invoiceVendors],
+  );
+
+  async function saveVendor(costId: string) {
+    const name = editVendorVal.trim();
+    setSavingVendor(true);
+    try {
+      const { error } = await db
+        .from("service_costs")
+        .update({ vendor: name || null })
+        .eq("id", costId);
+      if (error) throw error;
+      toast.success("Vendor updated.");
+      qc.invalidateQueries({ queryKey: ["service_costs"] });
+      setEditVendorId(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update vendor");
+    } finally {
+      setSavingVendor(false);
+    }
+  }
 
   const payByCost = useMemo(
     () => Object.fromEntries(payments.map((p) => [p.service_cost_id, p])),
@@ -406,6 +455,11 @@ function CostsPage() {
 
       {tab === "Costs List" && (
         <>
+          <datalist id="cost-vendor-suggestions">
+            {vendorOptions.map((v) => (
+              <option key={v} value={v} />
+            ))}
+          </datalist>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="h-11 w-56">
@@ -447,7 +501,45 @@ function CostsPage() {
                         <td className="px-4 py-3 text-muted-foreground">{c.category}</td>
                         <td className="px-4 py-3 text-right tabular-nums font-semibold">{eur(c.amount)}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{c.due_day}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{c.vendor}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {editVendorId === c.id ? (
+                            <div className="flex items-center gap-1.5">
+                              <Input
+                                value={editVendorVal}
+                                onChange={(e) => setEditVendorVal(e.target.value)}
+                                list="cost-vendor-suggestions"
+                                autoComplete="off"
+                                autoFocus
+                                className="h-8 w-44 text-sm"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") saveVendor(c.id);
+                                  if (e.key === "Escape") setEditVendorId(null);
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                className="h-8 px-2"
+                                disabled={savingVendor}
+                                onClick={() => saveVendor(c.id)}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditVendorId(c.id);
+                                setEditVendorVal(c.vendor ?? "");
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded px-1 -mx-1 text-left hover:bg-secondary/50"
+                              title="Click to set vendor"
+                            >
+                              {c.vendor || <span className="italic opacity-70">Set vendor</span>}
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_BADGE[status]}`}>
                             {status}
