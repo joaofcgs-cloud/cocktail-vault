@@ -5,6 +5,7 @@ import { db, type ServiceCost, type ServiceCostPayment } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -13,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { eur } from "@/lib/format";
-import { Download, Lock, CheckCircle2, Clock, AlertOctagon } from "lucide-react";
+import { Download, Lock, CheckCircle2, Clock, AlertOctagon, Check, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/costs")({
