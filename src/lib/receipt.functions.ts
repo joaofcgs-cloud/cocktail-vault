@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { CATEGORY_TREE } from "@/lib/categories";
+
+const CATEGORY_GUIDE = Object.entries(CATEGORY_TREE)
+  .map(([cat, subs]) => `- ${cat}: ${subs.join(", ")}`)
+  .join("\n");
 
 const Input = z.object({
   // Image or PDF as a data URL (data:<mime>;base64,...)
