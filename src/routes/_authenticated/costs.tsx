@@ -795,16 +795,12 @@ function CostsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">
-                {periodMode === "month"
-                  ? `${MONTH_NAMES[selMonth - 1]} ${selYear}`
-                  : `${selYear}`}
-              </p>
+              <p className="text-sm text-muted-foreground">All uploaded invoices</p>
               <p className="text-lg font-black text-teal">{eur(supplierInvoicesTotal)}</p>
             </div>
             {supplierInvoices.length === 0 ? (
               <Card className="border-border bg-card p-6 text-center text-sm text-muted-foreground">
-                No invoices for this supplier in the selected period.
+                No invoices uploaded for this supplier.
               </Card>
             ) : (
               <div className="space-y-3">
