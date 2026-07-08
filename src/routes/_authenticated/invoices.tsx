@@ -381,7 +381,17 @@ function InvoicesPage() {
                     onChange={(e) => setVendor(e.target.value)}
                     placeholder="Supplier name"
                     className="h-11"
+                    list="vendor-suggestions"
+                    autoComplete="off"
                   />
+                  <datalist id="vendor-suggestions">
+                    {vendorOptions.map((v) => (
+                      <option key={v} value={v} />
+                    ))}
+                  </datalist>
+                  <p className="text-xs text-muted-foreground">
+                    Start typing to pick from saved suppliers and keep names consistent.
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
