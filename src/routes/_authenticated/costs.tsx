@@ -380,6 +380,27 @@ function CostsPage() {
 
       {tab === "Dashboard" && (
         <div className="space-y-6">
+          <PeriodControl
+            periodMode={periodMode}
+            setPeriodMode={setPeriodMode}
+            selMonth={selMonth}
+            setSelMonth={setSelMonth}
+            selYear={selYear}
+            setSelYear={setSelYear}
+            monthNames={MONTH_NAMES}
+            yearOptions={yearOptions}
+          />
+          <Card className="border-border bg-card p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Invoiced ({periodLabel})
+            </p>
+            <p className="mt-2 text-2xl font-black text-teal">
+              {eur([...invoiceTotalByVendor.values()].reduce((s, v) => s + v, 0))}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Total of invoices for {periodMode === "month" ? `${MONTH_NAMES[selMonth - 1]} ${selYear}` : selYear}
+            </p>
+          </Card>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <MiniKpi label="Monthly Fixed" value={eur(monthly)} tone="var(--teal)" />
             <MiniKpi label="Paid" value={eur(paid)} tone="var(--green)" />
