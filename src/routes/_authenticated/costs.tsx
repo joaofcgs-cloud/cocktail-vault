@@ -106,6 +106,38 @@ function CostsPage() {
     [costs, invoiceVendors],
   );
 
+  // Full invoices for computing per-vendor invoiced totals.
+  const { data: invoices = [] } = useQuery({
+    queryKey: ["invoices_full"],
+    queryFn: async (): Promise<Invoice[]> => {
+      const { data, error } = await db
+        .from("invoices")
+        .select("*")
+        .order("date", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOwner,
+  });
+
+  // Sum of invoice totals per vendor, filtered by the selected period.
+  const invoiceTotalByVendor = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const inv of invoices) {
+      if (!inv.vendor) continue;
+      const d = inv.date ? new Date(inv.date) : null;
+      if (!d || Number.isNaN(d.getTime())) continue;
+      if (d.getFullYear() !== selYear) continue;
+      if (periodMode === "month" && d.getMonth() + 1 !== selMonth) continue;
+      const key = inv.vendor.trim();
+      map.set(key, (map.get(key) ?? 0) + (inv.total ?? 0));
+    }
+    return map;
+  }, [invoices, periodMode, selMonth, selYear]);
+
+  const invoicedFor = (vendor: string | null) =>
+    vendor ? invoiceTotalByVendor.get(vendor.trim()) ?? 0 : 0;
+
   async function saveVendor(costId: string) {
     const name = editVendorVal.trim();
     setSavingVendor(true);
