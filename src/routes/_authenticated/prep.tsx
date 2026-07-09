@@ -222,11 +222,20 @@ function PrepPage() {
       toast.error("Give the prep recipe a name.");
       return;
     }
+    if (catConfig.single && draft.length > 1) {
+      toast.error("A glass of wine allows only one ingredient.");
+      return;
+    }
+    if (catConfig.wineOnly && draft.some((d) => !isWine(foodById.get(d.food_inventory_id)))) {
+      toast.error("A glass of wine can only contain a wine ingredient.");
+      return;
+    }
     setSaving(true);
     const { data: recipe, error } = await db
       .from("prep_recipes")
       .insert({
         name: name.trim(),
+        category,
         yield_amount: Number(yieldAmount) || 0,
         yield_unit: yieldUnit,
         shelf_life_days: Number(shelfLife) || null,
