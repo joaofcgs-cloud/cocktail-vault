@@ -189,6 +189,7 @@ function PrepPage() {
 
   function resetForm() {
     setName("");
+    setCategory("food");
     setYieldAmount("500");
     setYieldUnit("ml");
     setShelfLife("14");
@@ -197,13 +198,18 @@ function PrepPage() {
   }
 
   function addDraftRow() {
-    if (food.length === 0) {
+    if (catConfig.single && draft.length >= 1) {
+      toast.error("A glass of wine allows only one ingredient.");
+      return;
+    }
+    const pool = catConfig.wineOnly ? selectableFood : food;
+    if (pool.length === 0) {
       toast.error("Add food items in Stock first.");
       return;
     }
     setDraft((d) => [
       ...d,
-      { food_inventory_id: food[0].id, amount: 1, amount_unit: "gram" },
+      { food_inventory_id: pool[0].id, amount: 1, amount_unit: catConfig.units[0] },
     ]);
   }
 
