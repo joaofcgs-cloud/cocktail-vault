@@ -345,16 +345,39 @@ function PrepPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black tracking-tight md:text-3xl">
-            Prep Recipes
+            Prep Lab
           </h1>
           <p className="text-sm text-muted-foreground">
             {recipes.length} house-made batch{recipes.length === 1 ? "" : "es"}
           </p>
         </div>
         {isOwner && (
-          <Button className="h-11 gap-2" onClick={() => setOpen(true)}>
-            <Plus className="h-4 w-4" /> New Prep Recipe
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" className="h-11 gap-2">
+              <label className="cursor-pointer">
+                {importing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                {importing ? "Reading…" : "Import PDF / Excel"}
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="application/pdf,.pdf,.xlsx,.xls,.csv,.ods,.tsv,.txt,.md,image/*,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                  disabled={importing}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) handleImportFile(f);
+                  }}
+                />
+              </label>
+            </Button>
+            <Button className="h-11 gap-2" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4" /> New Prep Recipe
+            </Button>
+          </div>
         )}
       </div>
 
