@@ -649,6 +649,121 @@ function PrepPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-teal" /> Review Imported Recipes
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Match each ingredient to your ingredient database. Unmatched
+            ingredients are skipped from cost. Confirm to save.
+          </p>
+          <div className="space-y-5">
+            {imported.map((r, ri) => (
+              <div key={ri} className="rounded-xl border border-border bg-card p-4">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                  <Input
+                    value={r.name}
+                    onChange={(e) =>
+                      setImported((arr) =>
+                        arr.map((x, i) => (i === ri ? { ...x, name: e.target.value } : x)),
+                      )
+                    }
+                    className="h-10 sm:col-span-2"
+                    placeholder="Recipe name"
+                  />
+                  <Input
+                    type="number"
+                    value={r.yield_amount}
+                    onChange={(e) =>
+                      setImported((arr) =>
+                        arr.map((x, i) =>
+                          i === ri ? { ...x, yield_amount: Number(e.target.value) } : x,
+                        ),
+                      )
+                    }
+                    className="h-10"
+                    placeholder="Yield"
+                  />
+                  <Input
+                    value={r.yield_unit}
+                    onChange={(e) =>
+                      setImported((arr) =>
+                        arr.map((x, i) => (i === ri ? { ...x, yield_unit: e.target.value } : x)),
+                      )
+                    }
+                    className="h-10"
+                    placeholder="Unit"
+                  />
+                </div>
+                <div className="mt-3 space-y-2">
+                  {r.ingredients.map((ing, ii) => (
+                    <div key={ii} className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-sm">
+                        {ing.name}{" "}
+                        <span className="text-muted-foreground">
+                          ({ing.amount} {ing.amount_unit})
+                        </span>
+                      </span>
+                      <Select
+                        value={ing.food_inventory_id || "none"}
+                        onValueChange={(v) =>
+                          setImported((arr) =>
+                            arr.map((x, i) =>
+                              i === ri
+                                ? {
+                                    ...x,
+                                    ingredients: x.ingredients.map((y, j) =>
+                                      j === ii
+                                        ? { ...y, food_inventory_id: v === "none" ? "" : v }
+                                        : y,
+                                    ),
+                                  }
+                                : x,
+                            ),
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-9 w-44">
+                          <SelectValue placeholder="No match" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">— Skip —</SelectItem>
+                          {food.map((fi) => (
+                            <SelectItem key={fi.id} value={fi.id}>
+                              {fi.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                  {r.ingredients.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No ingredients detected.</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReviewOpen(false);
+                setImported([]);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={saveImported} disabled={importing}>
+              {importing ? "Saving…" : `Save ${imported.length} Recipe${imported.length === 1 ? "" : "s"}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
