@@ -589,8 +589,11 @@ function PrepPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ml">ml</SelectItem>
-                    <SelectItem value="batch">batch</SelectItem>
+                    {catConfig.yieldUnits.map((u) => (
+                      <SelectItem key={u} value={u}>
+                        {u}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
