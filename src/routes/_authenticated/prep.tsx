@@ -28,8 +28,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { eur } from "@/lib/format";
-import { Plus, Trash2, FlaskConical, Beaker } from "lucide-react";
+import { Plus, Trash2, FlaskConical, Beaker, Upload, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { scanPrepRecipes, type ParsedPrepRecipe } from "@/lib/prep-recipe.functions";
+import { useServerFn } from "@tanstack/react-start";
+import { bestMatch } from "@/lib/match";
 
 export const Route = createFileRoute("/_authenticated/prep")({
   head: () => ({ meta: [{ title: "Prep — Bar Command Center" }] }),
@@ -42,6 +45,23 @@ interface DraftIngredient {
   food_inventory_id: string;
   amount: number;
   amount_unit: string;
+}
+
+interface ImportIngredient {
+  name: string;
+  amount: number;
+  amount_unit: string;
+  food_inventory_id: string; // "" = skip / no match
+  confidence: number;
+}
+
+interface ImportRecipe {
+  name: string;
+  yield_amount: number;
+  yield_unit: string;
+  shelf_life_days: number | null;
+  instructions: string;
+  ingredients: ImportIngredient[];
 }
 
 function ingredientCost(food: FoodItem | undefined, amount: number): number {
@@ -62,6 +82,10 @@ function PrepPage() {
   const [instructions, setInstructions] = useState("");
   const [draft, setDraft] = useState<DraftIngredient[]>([]);
   const [saving, setSaving] = useState(false);
+  const runScan = useServerFn(scanPrepRecipes);
+  const [importing, setImporting] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [imported, setImported] = useState<ImportRecipe[]>([]);
 
   const { data: recipes = [] } = useQuery({
     queryKey: ["prep_recipes"],
@@ -189,21 +213,171 @@ function PrepPage() {
     qc.invalidateQueries({ queryKey: ["prep_ingredients"] });
   }
 
+  // ---- File import (PDF / Excel / CSV / text) ----
+  function fileToDataUrl(f: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(f);
+    });
+  }
+  function fileToText(f: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(f);
+    });
+  }
+  async function spreadsheetToText(f: File): Promise<string> {
+    const { read, utils } = await import("xlsx");
+    const buf = await f.arrayBuffer();
+    const wb = read(buf, { type: "array" });
+    return wb.SheetNames.map(
+      (name) => `# Sheet: ${name}\n${utils.sheet_to_csv(wb.Sheets[name])}`,
+    ).join("\n\n");
+  }
+  async function buildPayload(f: File) {
+    const name = f.name.toLowerCase();
+    const mime = f.type;
+    if (/\.(xlsx|xls|ods)$/.test(name) || mime.includes("spreadsheet") || mime.includes("excel")) {
+      return { textContent: await spreadsheetToText(f) };
+    }
+    if (mime.startsWith("text/") || /\.(txt|md|csv|tsv|json)$/.test(name)) {
+      return { textContent: await fileToText(f) };
+    }
+    return { fileDataUrl: await fileToDataUrl(f), mimeType: mime, filename: f.name };
+  }
+
+  function toImportRecipe(r: ParsedPrepRecipe): ImportRecipe {
+    const candidates = food.map((fi) => ({ id: fi.id, name: fi.name }));
+    return {
+      name: r.name,
+      yield_amount: r.yield_amount,
+      yield_unit: r.yield_unit,
+      shelf_life_days: r.shelf_life_days,
+      instructions: r.instructions,
+      ingredients: r.ingredients.map((ing) => {
+        const m = candidates.length
+          ? bestMatch(ing.name, candidates)
+          : { id: null, confidence: 0 };
+        return {
+          name: ing.name,
+          amount: ing.amount,
+          amount_unit: ing.amount_unit,
+          food_inventory_id: m.confidence >= 60 && m.id ? m.id : "",
+          confidence: m.confidence,
+        };
+      }),
+    };
+  }
+
+  async function handleImportFile(f: File) {
+    if (!isOwner) {
+      toast.error("Only Owners can import prep recipes.");
+      return;
+    }
+    setImporting(true);
+    try {
+      const payload = await buildPayload(f);
+      const { recipes: parsed } = await runScan({ data: payload });
+      if (!parsed.length) {
+        toast.error("No recipes found in that file.");
+        return;
+      }
+      setImported(parsed.map(toImportRecipe));
+      setReviewOpen(true);
+      toast.success(`Read ${parsed.length} recipe${parsed.length === 1 ? "" : "s"}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function saveImported() {
+    if (!isOwner) return;
+    setImporting(true);
+    let saved = 0;
+    for (const r of imported) {
+      if (!r.name.trim()) continue;
+      const { data: recipe, error } = await db
+        .from("prep_recipes")
+        .insert({
+          name: r.name.trim(),
+          yield_amount: r.yield_amount || 0,
+          yield_unit: r.yield_unit || "ml",
+          shelf_life_days: r.shelf_life_days,
+          instructions: r.instructions.trim() || null,
+        })
+        .select()
+        .single();
+      if (error || !recipe) {
+        toast.error(error?.message ?? "Could not save a recipe");
+        continue;
+      }
+      const rows = r.ingredients
+        .filter((i) => i.food_inventory_id)
+        .map((i) => ({
+          prep_recipe_id: recipe.id,
+          food_inventory_id: i.food_inventory_id,
+          amount: i.amount,
+          amount_unit: i.amount_unit,
+          cost: ingredientCost(foodById.get(i.food_inventory_id), i.amount),
+        }));
+      if (rows.length) {
+        const { error: ingErr } = await db.from("prep_ingredients").insert(rows);
+        if (ingErr) toast.error(ingErr.message);
+      }
+      saved++;
+    }
+    setImporting(false);
+    setReviewOpen(false);
+    setImported([]);
+    if (saved) toast.success(`Saved ${saved} recipe${saved === 1 ? "" : "s"}`);
+    qc.invalidateQueries({ queryKey: ["prep_recipes"] });
+    qc.invalidateQueries({ queryKey: ["prep_ingredients"] });
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black tracking-tight md:text-3xl">
-            Prep Recipes
+            Prep Lab
           </h1>
           <p className="text-sm text-muted-foreground">
             {recipes.length} house-made batch{recipes.length === 1 ? "" : "es"}
           </p>
         </div>
         {isOwner && (
-          <Button className="h-11 gap-2" onClick={() => setOpen(true)}>
-            <Plus className="h-4 w-4" /> New Prep Recipe
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" className="h-11 gap-2">
+              <label className="cursor-pointer">
+                {importing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                {importing ? "Reading…" : "Import PDF / Excel"}
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="application/pdf,.pdf,.xlsx,.xls,.csv,.ods,.tsv,.txt,.md,image/*,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                  disabled={importing}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) handleImportFile(f);
+                  }}
+                />
+              </label>
+            </Button>
+            <Button className="h-11 gap-2" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4" /> New Prep Recipe
+            </Button>
+          </div>
         )}
       </div>
 
@@ -471,6 +645,121 @@ function PrepPage() {
             </Button>
             <Button onClick={saveRecipe} disabled={saving}>
               {saving ? "Saving…" : "Save Recipe"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-teal" /> Review Imported Recipes
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Match each ingredient to your ingredient database. Unmatched
+            ingredients are skipped from cost. Confirm to save.
+          </p>
+          <div className="space-y-5">
+            {imported.map((r, ri) => (
+              <div key={ri} className="rounded-xl border border-border bg-card p-4">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                  <Input
+                    value={r.name}
+                    onChange={(e) =>
+                      setImported((arr) =>
+                        arr.map((x, i) => (i === ri ? { ...x, name: e.target.value } : x)),
+                      )
+                    }
+                    className="h-10 sm:col-span-2"
+                    placeholder="Recipe name"
+                  />
+                  <Input
+                    type="number"
+                    value={r.yield_amount}
+                    onChange={(e) =>
+                      setImported((arr) =>
+                        arr.map((x, i) =>
+                          i === ri ? { ...x, yield_amount: Number(e.target.value) } : x,
+                        ),
+                      )
+                    }
+                    className="h-10"
+                    placeholder="Yield"
+                  />
+                  <Input
+                    value={r.yield_unit}
+                    onChange={(e) =>
+                      setImported((arr) =>
+                        arr.map((x, i) => (i === ri ? { ...x, yield_unit: e.target.value } : x)),
+                      )
+                    }
+                    className="h-10"
+                    placeholder="Unit"
+                  />
+                </div>
+                <div className="mt-3 space-y-2">
+                  {r.ingredients.map((ing, ii) => (
+                    <div key={ii} className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-sm">
+                        {ing.name}{" "}
+                        <span className="text-muted-foreground">
+                          ({ing.amount} {ing.amount_unit})
+                        </span>
+                      </span>
+                      <Select
+                        value={ing.food_inventory_id || "none"}
+                        onValueChange={(v) =>
+                          setImported((arr) =>
+                            arr.map((x, i) =>
+                              i === ri
+                                ? {
+                                    ...x,
+                                    ingredients: x.ingredients.map((y, j) =>
+                                      j === ii
+                                        ? { ...y, food_inventory_id: v === "none" ? "" : v }
+                                        : y,
+                                    ),
+                                  }
+                                : x,
+                            ),
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-9 w-44">
+                          <SelectValue placeholder="No match" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">— Skip —</SelectItem>
+                          {food.map((fi) => (
+                            <SelectItem key={fi.id} value={fi.id}>
+                              {fi.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                  {r.ingredients.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No ingredients detected.</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReviewOpen(false);
+                setImported([]);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={saveImported} disabled={importing}>
+              {importing ? "Saving…" : `Save ${imported.length} Recipe${imported.length === 1 ? "" : "s"}`}
             </Button>
           </DialogFooter>
         </DialogContent>
