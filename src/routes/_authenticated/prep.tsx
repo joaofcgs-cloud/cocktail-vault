@@ -65,6 +65,10 @@ function PrepPage() {
   const [instructions, setInstructions] = useState("");
   const [draft, setDraft] = useState<DraftIngredient[]>([]);
   const [saving, setSaving] = useState(false);
+  const runScan = useServerFn(scanPrepRecipes);
+  const [importing, setImporting] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [imported, setImported] = useState<ImportRecipe[]>([]);
 
   const { data: recipes = [] } = useQuery({
     queryKey: ["prep_recipes"],
