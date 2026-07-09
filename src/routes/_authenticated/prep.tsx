@@ -41,6 +41,32 @@ export const Route = createFileRoute("/_authenticated/prep")({
 
 const UNITS = ["gram", "ml", "leaf", "slice", "piece", "dash", "drop", "Un"];
 
+interface PrepCategory {
+  value: string;
+  label: string;
+  units: string[]; // allowed ingredient units
+  yieldUnits: string[];
+  single: boolean; // only one ingredient allowed
+  wineOnly: boolean; // ingredient must be wine
+}
+
+const PREP_CATEGORIES: PrepCategory[] = [
+  { value: "food", label: "Food", units: ["gram", "ml"], yieldUnits: ["gram", "ml", "batch"], single: false, wineOnly: false },
+  { value: "cocktail", label: "Cocktail", units: ["ml"], yieldUnits: ["ml"], single: false, wineOnly: false },
+  { value: "cocktail_batch", label: "Cocktail Batch", units: ["ml"], yieldUnits: ["ml", "batch"], single: false, wineOnly: false },
+  { value: "glass_of_wine", label: "Glass of Wine", units: ["ml"], yieldUnits: ["ml"], single: true, wineOnly: true },
+];
+
+const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
+  PREP_CATEGORIES.map((c) => [c.value, c.label]),
+);
+
+function isWine(f: FoodItem | undefined): boolean {
+  if (!f) return false;
+  const s = `${f.name} ${f.category}`.toLowerCase();
+  return s.includes("wine") || s.includes("vinho");
+}
+
 interface DraftIngredient {
   food_inventory_id: string;
   amount: number;
