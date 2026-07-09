@@ -102,6 +102,7 @@ function PrepPage() {
   const { isOwner } = useAuth();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [category, setCategory] = useState("food");
   const [yieldAmount, setYieldAmount] = useState("500");
   const [yieldUnit, setYieldUnit] = useState("ml");
   const [shelfLife, setShelfLife] = useState("14");
