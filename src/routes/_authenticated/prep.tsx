@@ -213,6 +213,133 @@ function PrepPage() {
     qc.invalidateQueries({ queryKey: ["prep_ingredients"] });
   }
 
+  // ---- File import (PDF / Excel / CSV / text) ----
+  function fileToDataUrl(f: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(f);
+    });
+  }
+  function fileToText(f: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(f);
+    });
+  }
+  async function spreadsheetToText(f: File): Promise<string> {
+    const { read, utils } = await import("xlsx");
+    const buf = await f.arrayBuffer();
+    const wb = read(buf, { type: "array" });
+    return wb.SheetNames.map(
+      (name) => `# Sheet: ${name}\n${utils.sheet_to_csv(wb.Sheets[name])}`,
+    ).join("\n\n");
+  }
+  async function buildPayload(f: File) {
+    const name = f.name.toLowerCase();
+    const mime = f.type;
+    if (/\.(xlsx|xls|ods)$/.test(name) || mime.includes("spreadsheet") || mime.includes("excel")) {
+      return { textContent: await spreadsheetToText(f) };
+    }
+    if (mime.startsWith("text/") || /\.(txt|md|csv|tsv|json)$/.test(name)) {
+      return { textContent: await fileToText(f) };
+    }
+    return { fileDataUrl: await fileToDataUrl(f), mimeType: mime, filename: f.name };
+  }
+
+  function toImportRecipe(r: ParsedPrepRecipe): ImportRecipe {
+    const candidates = food.map((fi) => ({ id: fi.id, name: fi.name }));
+    return {
+      name: r.name,
+      yield_amount: r.yield_amount,
+      yield_unit: r.yield_unit,
+      shelf_life_days: r.shelf_life_days,
+      instructions: r.instructions,
+      ingredients: r.ingredients.map((ing) => {
+        const m = candidates.length
+          ? bestMatch(ing.name, candidates)
+          : { id: null, confidence: 0 };
+        return {
+          name: ing.name,
+          amount: ing.amount,
+          amount_unit: ing.amount_unit,
+          food_inventory_id: m.confidence >= 60 && m.id ? m.id : "",
+          confidence: m.confidence,
+        };
+      }),
+    };
+  }
+
+  async function handleImportFile(f: File) {
+    if (!isOwner) {
+      toast.error("Only Owners can import prep recipes.");
+      return;
+    }
+    setImporting(true);
+    try {
+      const payload = await buildPayload(f);
+      const { recipes: parsed } = await runScan({ data: payload });
+      if (!parsed.length) {
+        toast.error("No recipes found in that file.");
+        return;
+      }
+      setImported(parsed.map(toImportRecipe));
+      setReviewOpen(true);
+      toast.success(`Read ${parsed.length} recipe${parsed.length === 1 ? "" : "s"}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function saveImported() {
+    if (!isOwner) return;
+    setImporting(true);
+    let saved = 0;
+    for (const r of imported) {
+      if (!r.name.trim()) continue;
+      const { data: recipe, error } = await db
+        .from("prep_recipes")
+        .insert({
+          name: r.name.trim(),
+          yield_amount: r.yield_amount || 0,
+          yield_unit: r.yield_unit || "ml",
+          shelf_life_days: r.shelf_life_days,
+          instructions: r.instructions.trim() || null,
+        })
+        .select()
+        .single();
+      if (error || !recipe) {
+        toast.error(error?.message ?? "Could not save a recipe");
+        continue;
+      }
+      const rows = r.ingredients
+        .filter((i) => i.food_inventory_id)
+        .map((i) => ({
+          prep_recipe_id: recipe.id,
+          food_inventory_id: i.food_inventory_id,
+          amount: i.amount,
+          amount_unit: i.amount_unit,
+          cost: ingredientCost(foodById.get(i.food_inventory_id), i.amount),
+        }));
+      if (rows.length) {
+        const { error: ingErr } = await db.from("prep_ingredients").insert(rows);
+        if (ingErr) toast.error(ingErr.message);
+      }
+      saved++;
+    }
+    setImporting(false);
+    setReviewOpen(false);
+    setImported([]);
+    if (saved) toast.success(`Saved ${saved} recipe${saved === 1 ? "" : "s"}`);
+    qc.invalidateQueries({ queryKey: ["prep_recipes"] });
+    qc.invalidateQueries({ queryKey: ["prep_ingredients"] });
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
