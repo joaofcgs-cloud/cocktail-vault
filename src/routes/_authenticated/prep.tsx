@@ -462,7 +462,12 @@ function PrepPage() {
               <Card key={r.id} className="border-border bg-card p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h2 className="truncate text-lg font-bold">{r.name}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="truncate text-lg font-bold">{r.name}</h2>
+                      <span className="shrink-0 rounded-full bg-teal/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
+                        {CATEGORY_LABELS[r.category] ?? r.category}
+                      </span>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       Yields {r.yield_amount} {r.yield_unit} ·{" "}
                       {r.shelf_life_days ?? "?"} day shelf life
