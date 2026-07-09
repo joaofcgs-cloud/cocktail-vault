@@ -41,6 +41,32 @@ export const Route = createFileRoute("/_authenticated/prep")({
 
 const UNITS = ["gram", "ml", "leaf", "slice", "piece", "dash", "drop", "Un"];
 
+interface PrepCategory {
+  value: string;
+  label: string;
+  units: string[]; // allowed ingredient units
+  yieldUnits: string[];
+  single: boolean; // only one ingredient allowed
+  wineOnly: boolean; // ingredient must be wine
+}
+
+const PREP_CATEGORIES: PrepCategory[] = [
+  { value: "food", label: "Food", units: ["gram", "ml"], yieldUnits: ["gram", "ml", "batch"], single: false, wineOnly: false },
+  { value: "cocktail", label: "Cocktail", units: ["ml"], yieldUnits: ["ml"], single: false, wineOnly: false },
+  { value: "cocktail_batch", label: "Cocktail Batch", units: ["ml"], yieldUnits: ["ml", "batch"], single: false, wineOnly: false },
+  { value: "glass_of_wine", label: "Glass of Wine", units: ["ml"], yieldUnits: ["ml"], single: true, wineOnly: true },
+];
+
+const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
+  PREP_CATEGORIES.map((c) => [c.value, c.label]),
+);
+
+function isWine(f: FoodItem | undefined): boolean {
+  if (!f) return false;
+  const s = `${f.name} ${f.category}`.toLowerCase();
+  return s.includes("wine") || s.includes("vinho");
+}
+
 interface DraftIngredient {
   food_inventory_id: string;
   amount: number;
@@ -76,6 +102,7 @@ function PrepPage() {
   const { isOwner } = useAuth();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [category, setCategory] = useState("food");
   const [yieldAmount, setYieldAmount] = useState("500");
   const [yieldUnit, setYieldUnit] = useState("ml");
   const [shelfLife, setShelfLife] = useState("14");
@@ -139,8 +166,30 @@ function PrepPage() {
     0,
   );
 
+  const catConfig =
+    PREP_CATEGORIES.find((c) => c.value === category) ?? PREP_CATEGORIES[0];
+  const selectableFood = useMemo(
+    () => (catConfig.wineOnly ? food.filter(isWine) : food),
+    [food, catConfig.wineOnly],
+  );
+
+  function applyCategory(value: string) {
+    const cfg = PREP_CATEGORIES.find((c) => c.value === value) ?? PREP_CATEGORIES[0];
+    setCategory(value);
+    if (!cfg.yieldUnits.includes(yieldUnit)) setYieldUnit(cfg.yieldUnits[0]);
+    setDraft((rows) => {
+      let next = rows.map((r) => ({
+        ...r,
+        amount_unit: cfg.units.includes(r.amount_unit) ? r.amount_unit : cfg.units[0],
+      }));
+      if (cfg.single) next = next.slice(0, 1);
+      return next;
+    });
+  }
+
   function resetForm() {
     setName("");
+    setCategory("food");
     setYieldAmount("500");
     setYieldUnit("ml");
     setShelfLife("14");
@@ -149,13 +198,18 @@ function PrepPage() {
   }
 
   function addDraftRow() {
-    if (food.length === 0) {
+    if (catConfig.single && draft.length >= 1) {
+      toast.error("A glass of wine allows only one ingredient.");
+      return;
+    }
+    const pool = catConfig.wineOnly ? selectableFood : food;
+    if (pool.length === 0) {
       toast.error("Add food items in Stock first.");
       return;
     }
     setDraft((d) => [
       ...d,
-      { food_inventory_id: food[0].id, amount: 1, amount_unit: "gram" },
+      { food_inventory_id: pool[0].id, amount: 1, amount_unit: catConfig.units[0] },
     ]);
   }
 
@@ -168,11 +222,20 @@ function PrepPage() {
       toast.error("Give the prep recipe a name.");
       return;
     }
+    if (catConfig.single && draft.length > 1) {
+      toast.error("A glass of wine allows only one ingredient.");
+      return;
+    }
+    if (catConfig.wineOnly && draft.some((d) => !isWine(foodById.get(d.food_inventory_id)))) {
+      toast.error("A glass of wine can only contain a wine ingredient.");
+      return;
+    }
     setSaving(true);
     const { data: recipe, error } = await db
       .from("prep_recipes")
       .insert({
         name: name.trim(),
+        category,
         yield_amount: Number(yieldAmount) || 0,
         yield_unit: yieldUnit,
         shelf_life_days: Number(shelfLife) || null,
@@ -399,7 +462,12 @@ function PrepPage() {
               <Card key={r.id} className="border-border bg-card p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h2 className="truncate text-lg font-bold">{r.name}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="truncate text-lg font-bold">{r.name}</h2>
+                      <span className="shrink-0 rounded-full bg-teal/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
+                        {CATEGORY_LABELS[r.category] ?? r.category}
+                      </span>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       Yields {r.yield_amount} {r.yield_unit} ·{" "}
                       {r.shelf_life_days ?? "?"} day shelf life
@@ -487,6 +555,27 @@ function PrepPage() {
               />
             </div>
 
+            <div className="space-y-1.5">
+              <Label>Category</Label>
+              <Select value={category} onValueChange={applyCategory}>
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PREP_CATEGORIES.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {catConfig.wineOnly
+                  ? "Built in ml · one wine ingredient only."
+                  : `Built in ${catConfig.units.join(" or ")}.`}
+              </p>
+            </div>
+
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="prep-yield">Yield</Label>
@@ -505,8 +594,11 @@ function PrepPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ml">ml</SelectItem>
-                    <SelectItem value="batch">batch</SelectItem>
+                    {catConfig.yieldUnits.map((u) => (
+                      <SelectItem key={u} value={u}>
+                        {u}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -531,6 +623,7 @@ function PrepPage() {
                   size="sm"
                   className="h-8 gap-1"
                   onClick={addDraftRow}
+                  disabled={catConfig.single && draft.length >= 1}
                 >
                   <Plus className="h-3.5 w-3.5" /> Add
                 </Button>
@@ -553,7 +646,7 @@ function PrepPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {food.map((fi) => (
+                        {selectableFood.map((fi) => (
                           <SelectItem key={fi.id} value={fi.id}>
                             {fi.name}
                           </SelectItem>
@@ -588,7 +681,10 @@ function PrepPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {UNITS.map((u) => (
+                        {(catConfig.wineOnly || catConfig.value !== "food"
+                          ? catConfig.units
+                          : UNITS
+                        ).map((u) => (
                           <SelectItem key={u} value={u}>
                             {u}
                           </SelectItem>

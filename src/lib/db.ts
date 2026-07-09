@@ -41,6 +41,7 @@ export interface FoodItem {
 export interface PrepRecipe {
   id: string;
   name: string;
+  category: string;
   yield_amount: number;
   yield_unit: string;
   shelf_life_days: number | null;

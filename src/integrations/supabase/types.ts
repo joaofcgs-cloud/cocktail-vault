@@ -588,6 +588,7 @@ export type Database = {
       }
       prep_recipes: {
         Row: {
+          category: string
           cost_per_ml: number
           created_at: string
           id: string
@@ -600,6 +601,7 @@ export type Database = {
           yield_unit: string
         }
         Insert: {
+          category?: string
           cost_per_ml?: number
           created_at?: string
           id?: string
@@ -612,6 +614,7 @@ export type Database = {
           yield_unit?: string
         }
         Update: {
+          category?: string
           cost_per_ml?: number
           created_at?: string
           id?: string
