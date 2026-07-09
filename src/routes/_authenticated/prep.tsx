@@ -550,6 +550,27 @@ function PrepPage() {
               />
             </div>
 
+            <div className="space-y-1.5">
+              <Label>Category</Label>
+              <Select value={category} onValueChange={applyCategory}>
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PREP_CATEGORIES.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {catConfig.wineOnly
+                  ? "Built in ml · one wine ingredient only."
+                  : `Built in ${catConfig.units.join(" or ")}.`}
+              </p>
+            </div>
+
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="prep-yield">Yield</Label>
