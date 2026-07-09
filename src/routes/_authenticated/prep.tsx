@@ -47,6 +47,23 @@ interface DraftIngredient {
   amount_unit: string;
 }
 
+interface ImportIngredient {
+  name: string;
+  amount: number;
+  amount_unit: string;
+  food_inventory_id: string; // "" = skip / no match
+  confidence: number;
+}
+
+interface ImportRecipe {
+  name: string;
+  yield_amount: number;
+  yield_unit: string;
+  shelf_life_days: number | null;
+  instructions: string;
+  ingredients: ImportIngredient[];
+}
+
 function ingredientCost(food: FoodItem | undefined, amount: number): number {
   if (!food) return 0;
   // For Kg-priced foods, treat gram amounts via cost_per_gram; else per unit.
