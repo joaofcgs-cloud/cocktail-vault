@@ -166,6 +166,27 @@ function PrepPage() {
     0,
   );
 
+  const catConfig =
+    PREP_CATEGORIES.find((c) => c.value === category) ?? PREP_CATEGORIES[0];
+  const selectableFood = useMemo(
+    () => (catConfig.wineOnly ? food.filter(isWine) : food),
+    [food, catConfig.wineOnly],
+  );
+
+  function applyCategory(value: string) {
+    const cfg = PREP_CATEGORIES.find((c) => c.value === value) ?? PREP_CATEGORIES[0];
+    setCategory(value);
+    if (!cfg.yieldUnits.includes(yieldUnit)) setYieldUnit(cfg.yieldUnits[0]);
+    setDraft((rows) => {
+      let next = rows.map((r) => ({
+        ...r,
+        amount_unit: cfg.units.includes(r.amount_unit) ? r.amount_unit : cfg.units[0],
+      }));
+      if (cfg.single) next = next.slice(0, 1);
+      return next;
+    });
+  }
+
   function resetForm() {
     setName("");
     setYieldAmount("500");
