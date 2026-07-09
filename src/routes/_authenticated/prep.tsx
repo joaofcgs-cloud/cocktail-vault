@@ -618,6 +618,7 @@ function PrepPage() {
                   size="sm"
                   className="h-8 gap-1"
                   onClick={addDraftRow}
+                  disabled={catConfig.single && draft.length >= 1}
                 >
                   <Plus className="h-3.5 w-3.5" /> Add
                 </Button>
@@ -640,7 +641,7 @@ function PrepPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {food.map((fi) => (
+                        {selectableFood.map((fi) => (
                           <SelectItem key={fi.id} value={fi.id}>
                             {fi.name}
                           </SelectItem>
@@ -675,7 +676,10 @@ function PrepPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {UNITS.map((u) => (
+                        {(catConfig.wineOnly || catConfig.value !== "food"
+                          ? catConfig.units
+                          : UNITS
+                        ).map((u) => (
                           <SelectItem key={u} value={u}>
                             {u}
                           </SelectItem>
