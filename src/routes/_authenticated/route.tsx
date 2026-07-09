@@ -47,7 +47,7 @@ export const Route = createFileRoute("/_authenticated")({
 const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard, exact: true, ownerOnly: false },
   { to: "/stock", label: "Stock", icon: Boxes, exact: false, ownerOnly: false },
-  { to: "/prep", label: "Prep", icon: FlaskConical, exact: false, ownerOnly: false },
+  { to: "/prep", label: "Prep Lab", icon: FlaskConical, exact: false, ownerOnly: false },
   { to: "/sales", label: "Sales", icon: TrendingUp, exact: false, ownerOnly: false },
   { to: "/invoices", label: "Invoices", icon: ReceiptText, exact: false, ownerOnly: false },
   { to: "/calculators", label: "Calc", icon: Calculator, exact: false, ownerOnly: false },
