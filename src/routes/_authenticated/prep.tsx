@@ -28,8 +28,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { eur } from "@/lib/format";
-import { Plus, Trash2, FlaskConical, Beaker } from "lucide-react";
+import { Plus, Trash2, FlaskConical, Beaker, Upload, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { scanPrepRecipes, type ParsedPrepRecipe } from "@/lib/prep-recipe.functions";
+import { useServerFn } from "@tanstack/react-start";
+import { bestMatch } from "@/lib/match";
 
 export const Route = createFileRoute("/_authenticated/prep")({
   head: () => ({ meta: [{ title: "Prep — Bar Command Center" }] }),
