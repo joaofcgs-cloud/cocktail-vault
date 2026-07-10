@@ -534,7 +534,8 @@ function InvoicesPage() {
     }
   }
 
-  const flagged = rows.filter((r) => !r.inventoryId).length;
+  const flagged = rows.filter((r) => parseTarget(r.target).kind === "none").length;
+  const newItems = rows.filter((r) => parseTarget(r.target).kind === "new").length;
 
   const shownInvoices =
     filterCat === "all"
