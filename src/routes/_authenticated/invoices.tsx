@@ -378,13 +378,17 @@ function InvoicesPage() {
         qc.invalidateQueries({ queryKey: ["notifications"] });
       }
 
+      const parts: string[] = [];
+      if (stockUpdates > 0)
+        parts.push(`stock updated for ${stockUpdates} item${stockUpdates > 1 ? "s" : ""}`);
+      if (created > 0)
+        parts.push(`${created} new food item${created > 1 ? "s" : ""} created`);
       toast.success(
-        stockUpdates > 0
-          ? `Invoice saved · stock updated for ${stockUpdates} item${stockUpdates > 1 ? "s" : ""}.`
-          : "Invoice saved.",
+        parts.length ? `Invoice saved · ${parts.join(" · ")}.` : "Invoice saved.",
       );
       qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["inventory"] });
+      qc.invalidateQueries({ queryKey: ["food_inventory"] });
       setOpen(false);
       reset();
     } catch (err) {
