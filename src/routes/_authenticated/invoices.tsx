@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { db, type Invoice, type InventoryItem } from "@/lib/db";
+import { db, type Invoice, type InventoryItem, type FoodItem } from "@/lib/db";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useInventory } from "@/lib/queries";
@@ -65,17 +65,53 @@ interface LineRow {
   qty: number;
   unit_price: number;
   total: number;
-  inventoryId: string | null;
+  // target: "" (skip) | "spirit:<id>" | "food:<id>" | "new"
+  target: string;
   confidence: number;
   addStock: boolean;
   category: string;
   subcategory: string;
+  // new food-item fields (used when target === "new")
+  unitType: string;
+  shelfLife: string;
+  foodCategory: string;
+}
+
+function guessUnit(s: string): string {
+  const m = s.toLowerCase();
+  if (/\bkg\b|kilo/.test(m)) return "Kg";
+  if (/\bg\b|gram/.test(m)) return "g";
+  if (/\bcl\b/.test(m)) return "cl";
+  if (/\bml\b/.test(m)) return "ml";
+  if (/\bl\b|litro|liter/.test(m)) return "L";
+  return "un";
+}
+
+function parseTarget(t: string): {
+  kind: "spirit" | "food" | "new" | "none";
+  id: string | null;
+} {
+  if (t === "new") return { kind: "new", id: null };
+  if (t.startsWith("spirit:")) return { kind: "spirit", id: t.slice(7) };
+  if (t.startsWith("food:")) return { kind: "food", id: t.slice(5) };
+  return { kind: "none", id: null };
 }
 
 function InvoicesPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const { data: inventory = [] } = useInventory();
+  const { data: food = [] } = useQuery({
+    queryKey: ["food_inventory"],
+    queryFn: async (): Promise<FoodItem[]> => {
+      const { data, error } = await db
+        .from("food_inventory")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
   const [open, setOpen] = useState(false);
   const [vendor, setVendor] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -164,7 +200,20 @@ function InvoicesPage() {
   function addBlankRow() {
     setRows((rs) => [
       ...rs,
-      { product: "", qty: 1, unit_price: 0, total: 0, inventoryId: null, confidence: 0, addStock: true, category: "", subcategory: "" },
+      {
+        product: "",
+        qty: 1,
+        unit_price: 0,
+        total: 0,
+        target: "new",
+        confidence: 0,
+        addStock: true,
+        category: "",
+        subcategory: "",
+        unitType: "un",
+        shelfLife: "",
+        foodCategory: "",
+      },
     ]);
   }
 
@@ -237,28 +286,83 @@ function InvoicesPage() {
         qc.invalidateQueries({ queryKey: ["vendor_categories"] });
       }
 
-      // Auto-update stock for confirmed, matched line items
-      const stockRows = rows.filter((r) => r.addStock && r.inventoryId && r.qty > 0);
+      // Auto-update stock and auto-create new food items for confirmed lines
+      const stockRows = rows.filter((r) => {
+        const t = parseTarget(r.target);
+        return r.addStock && r.qty > 0 && t.kind !== "none";
+      });
       let stockUpdates = 0;
+      let created = 0;
       const changes: StockChange[] = [];
       for (const r of stockRows) {
-        const inv = inventory.find((i) => i.id === r.inventoryId);
-        if (!inv) continue;
-        const newStock = Number(inv.current_stock) + Number(r.qty);
-        const patch: Record<string, number> = { current_stock: newStock };
-        if (r.unit_price > 0) patch.unit_cost = r.unit_price;
-        const { error: upErr } = await db
-          .from("inventory")
-          .update(patch)
-          .eq("id", r.inventoryId);
-        if (upErr) throw upErr;
-        stockUpdates++;
-        changes.push({
-          name: inv.name,
-          qty: Number(r.qty),
-          newStock,
-          status: computeStatus(newStock, Number(inv.par_level)),
-        });
+        const t = parseTarget(r.target);
+
+        if (t.kind === "spirit") {
+          const inv = inventory.find((i) => i.id === t.id);
+          if (!inv) continue;
+          const newStock = Number(inv.current_stock) + Number(r.qty);
+          const patch: Record<string, number> = { current_stock: newStock };
+          if (r.unit_price > 0) patch.unit_cost = r.unit_price;
+          const { error: upErr } = await db
+            .from("inventory")
+            .update(patch)
+            .eq("id", t.id);
+          if (upErr) throw upErr;
+          stockUpdates++;
+          changes.push({
+            name: inv.name,
+            qty: Number(r.qty),
+            newStock,
+            status: computeStatus(newStock, Number(inv.par_level)),
+          });
+        } else if (t.kind === "food") {
+          const f = food.find((x) => x.id === t.id);
+          if (!f) continue;
+          const newStock = Number(f.current_stock) + Number(r.qty);
+          const patch: Record<string, unknown> = {
+            current_stock: newStock,
+            last_invoice_id: inserted?.id ?? null,
+            last_purchase_date: date,
+          };
+          if (r.unit_price > 0) patch.unit_cost = r.unit_price;
+          const { error: upErr } = await db
+            .from("food_inventory")
+            .update(patch)
+            .eq("id", t.id);
+          if (upErr) throw upErr;
+          stockUpdates++;
+          changes.push({
+            name: f.name,
+            qty: Number(r.qty),
+            unit: f.unit_type,
+            newStock,
+            status: computeStatus(newStock, Number(f.par_level)),
+          });
+        } else if (t.kind === "new") {
+          const name = r.product.trim();
+          if (!name) continue;
+          const shelf = r.shelfLife.trim() ? Number(r.shelfLife) : null;
+          const { error: insErr } = await db.from("food_inventory").insert({
+            name,
+            category: r.foodCategory.trim() || r.category || "Food",
+            unit_type: r.unitType || "un",
+            current_stock: Number(r.qty),
+            par_level: Number(r.qty),
+            unit_cost: Number(r.unit_price) || 0,
+            last_invoice_id: inserted?.id ?? null,
+            last_purchase_date: date,
+            shelf_life_days: shelf,
+          });
+          if (insErr) throw insErr;
+          created++;
+          changes.push({
+            name: `🆕 ${name} (new item)`,
+            qty: Number(r.qty),
+            unit: r.unitType || "un",
+            newStock: Number(r.qty),
+            status: computeStatus(Number(r.qty), Number(r.qty)),
+          });
+        }
       }
 
       // Fire in-app stock update notification on every confirmed invoice
@@ -274,13 +378,17 @@ function InvoicesPage() {
         qc.invalidateQueries({ queryKey: ["notifications"] });
       }
 
+      const parts: string[] = [];
+      if (stockUpdates > 0)
+        parts.push(`stock updated for ${stockUpdates} item${stockUpdates > 1 ? "s" : ""}`);
+      if (created > 0)
+        parts.push(`${created} new food item${created > 1 ? "s" : ""} created`);
       toast.success(
-        stockUpdates > 0
-          ? `Invoice saved · stock updated for ${stockUpdates} item${stockUpdates > 1 ? "s" : ""}.`
-          : "Invoice saved.",
+        parts.length ? `Invoice saved · ${parts.join(" · ")}.` : "Invoice saved.",
       );
       qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["inventory"] });
+      qc.invalidateQueries({ queryKey: ["food_inventory"] });
       setOpen(false);
       reset();
     } catch (err) {
@@ -359,21 +467,37 @@ function InvoicesPage() {
     try {
       const payload = await buildScanPayload(f);
       const parsed = await runScan({ data: payload });
-      const candidates = inventory.map((i) => ({ id: i.id, name: i.name }));
+      const spiritC = inventory.map((i) => ({ id: i.id, name: i.name }));
+      const foodC = food.map((f) => ({ id: f.id, name: f.name }));
       const matched: LineRow[] = parsed.items.map((it) => {
-        const m = bestMatch(it.product ?? "", candidates);
+        const product = it.product ?? "";
         const itemCat = normalizeCategory(it.category) ?? "";
         const itemSub = normalizeSubcategory(itemCat, it.subcategory) ?? "";
+        const ms = bestMatch(product, spiritC);
+        const mf = bestMatch(product, foodC);
+        // Pick the best existing match; if none is confident, auto-create food.
+        let target = "new";
+        let confidence = Math.max(ms.confidence, mf.confidence);
+        if (ms.confidence >= mf.confidence && ms.confidence >= 60) {
+          target = `spirit:${ms.id}`;
+          confidence = ms.confidence;
+        } else if (mf.confidence >= 60) {
+          target = `food:${mf.id}`;
+          confidence = mf.confidence;
+        }
         return {
-          product: it.product ?? "",
+          product,
           qty: Number(it.qty) || 0,
           unit_price: Number(it.unit_price) || 0,
           total: Number(it.total) || 0,
-          inventoryId: m.confidence >= 60 ? m.id : null,
-          confidence: m.confidence,
-          addStock: m.confidence >= 60,
+          target,
+          confidence,
+          addStock: true,
           category: itemCat,
           subcategory: itemSub,
+          unitType: guessUnit(product),
+          shelfLife: "",
+          foodCategory: it.category ?? "",
         };
       });
       setVendor(parsed.vendor || "");
@@ -410,7 +534,8 @@ function InvoicesPage() {
     }
   }
 
-  const flagged = rows.filter((r) => !r.inventoryId).length;
+  const flagged = rows.filter((r) => parseTarget(r.target).kind === "none").length;
+  const newItems = rows.filter((r) => parseTarget(r.target).kind === "new").length;
 
   const shownInvoices =
     filterCat === "all"
@@ -563,16 +688,24 @@ function InvoicesPage() {
                 )}
 
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <Label>Line items → inventory</Label>
-                    {flagged > 0 && (
-                      <span className="flex items-center gap-1 text-xs font-semibold text-red">
-                        <Flag className="h-3.5 w-3.5" /> {flagged} unmatched
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {newItems > 0 && (
+                        <span className="flex items-center gap-1 text-xs font-semibold text-purple">
+                          🆕 {newItems} new
+                        </span>
+                      )}
+                      {flagged > 0 && (
+                        <span className="flex items-center gap-1 text-xs font-semibold text-red">
+                          <Flag className="h-3.5 w-3.5" /> {flagged} skipped
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Matched items with “Add” checked will bump inventory stock on save.
+                    Unmatched items are auto-created in Food inventory. Items with
+                    “Add” checked update stock (or create the new item) on save.
                   </p>
 
                   {rows.map((r, i) => (
@@ -587,25 +720,78 @@ function InvoicesPage() {
                           placeholder="Product name"
                           className="h-9 text-sm"
                         />
-                        <ConfidenceBadge confidence={r.confidence} matched={!!r.inventoryId} />
+                        <ConfidenceBadge
+                          confidence={r.confidence}
+                          target={r.target}
+                        />
                       </div>
                       <select
-                        value={r.inventoryId ?? ""}
+                        value={r.target}
                         onChange={(e) =>
                           updateRow(i, {
-                            inventoryId: e.target.value || null,
-                            addStock: !!e.target.value,
+                            target: e.target.value,
+                            addStock: e.target.value !== "",
                           })
                         }
                         className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
                       >
-                        <option value="">— No inventory match —</option>
-                        {inventory.map((inv: InventoryItem) => (
-                          <option key={inv.id} value={inv.id}>
-                            {inv.name}
-                          </option>
-                        ))}
+                        <option value="new">🆕 Create new food item</option>
+                        <option value="">— Skip (no match) —</option>
+                        <optgroup label="Spirits">
+                          {inventory.map((inv: InventoryItem) => (
+                            <option key={inv.id} value={`spirit:${inv.id}`}>
+                              {inv.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Food">
+                          {food.map((f: FoodItem) => (
+                            <option key={f.id} value={`food:${f.id}`}>
+                              {f.name}
+                            </option>
+                          ))}
+                        </optgroup>
                       </select>
+                      {parseTarget(r.target).kind === "new" && (
+                        <div className="grid grid-cols-3 gap-2 rounded-md border border-purple/30 bg-purple/10 p-2">
+                          <div className="col-span-3 text-[11px] font-semibold text-purple">
+                            🆕 Will be created in Food inventory
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase text-muted-foreground">Food category</span>
+                            <Input
+                              value={r.foodCategory}
+                              onChange={(e) => updateRow(i, { foodCategory: e.target.value })}
+                              placeholder="e.g. Herbs"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase text-muted-foreground">Unit</span>
+                            <select
+                              value={r.unitType}
+                              onChange={(e) => updateRow(i, { unitType: e.target.value })}
+                              className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                            >
+                              {["un", "Kg", "g", "L", "ml", "cl"].map((u) => (
+                                <option key={u} value={u}>
+                                  {u}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase text-muted-foreground">Shelf life (days)</span>
+                            <Input
+                              type="number"
+                              value={r.shelfLife}
+                              onChange={(e) => updateRow(i, { shelfLife: e.target.value })}
+                              placeholder="e.g. 5"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
                         <div className="flex-1">
                           <span className="text-[10px] uppercase text-muted-foreground">Qty</span>
@@ -632,7 +818,7 @@ function InvoicesPage() {
                           <input
                             type="checkbox"
                             checked={r.addStock}
-                            disabled={!r.inventoryId}
+                            disabled={parseTarget(r.target).kind === "none"}
                             onChange={(e) => updateRow(i, { addStock: e.target.checked })}
                             className="h-5 w-5 accent-teal"
                           />
@@ -887,11 +1073,18 @@ function InvoicesPage() {
   );
 }
 
-function ConfidenceBadge({ confidence, matched }: { confidence: number; matched: boolean }) {
-  if (!matched) {
+function ConfidenceBadge({ confidence, target }: { confidence: number; target: string }) {
+  if (target === "new") {
+    return (
+      <span className="flex shrink-0 items-center gap-1 rounded-full bg-purple/15 px-2 py-1 text-[11px] font-semibold text-purple">
+        🆕 New item
+      </span>
+    );
+  }
+  if (target === "") {
     return (
       <span className="flex shrink-0 items-center gap-1 rounded-full bg-red/15 px-2 py-1 text-[11px] font-semibold text-red">
-        <Flag className="h-3 w-3" /> Unknown
+        <Flag className="h-3 w-3" /> Skipped
       </span>
     );
   }
