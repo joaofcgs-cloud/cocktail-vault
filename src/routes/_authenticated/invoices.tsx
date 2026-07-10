@@ -467,21 +467,37 @@ function InvoicesPage() {
     try {
       const payload = await buildScanPayload(f);
       const parsed = await runScan({ data: payload });
-      const candidates = inventory.map((i) => ({ id: i.id, name: i.name }));
+      const spiritC = inventory.map((i) => ({ id: i.id, name: i.name }));
+      const foodC = food.map((f) => ({ id: f.id, name: f.name }));
       const matched: LineRow[] = parsed.items.map((it) => {
-        const m = bestMatch(it.product ?? "", candidates);
+        const product = it.product ?? "";
         const itemCat = normalizeCategory(it.category) ?? "";
         const itemSub = normalizeSubcategory(itemCat, it.subcategory) ?? "";
+        const ms = bestMatch(product, spiritC);
+        const mf = bestMatch(product, foodC);
+        // Pick the best existing match; if none is confident, auto-create food.
+        let target = "new";
+        let confidence = Math.max(ms.confidence, mf.confidence);
+        if (ms.confidence >= mf.confidence && ms.confidence >= 60) {
+          target = `spirit:${ms.id}`;
+          confidence = ms.confidence;
+        } else if (mf.confidence >= 60) {
+          target = `food:${mf.id}`;
+          confidence = mf.confidence;
+        }
         return {
-          product: it.product ?? "",
+          product,
           qty: Number(it.qty) || 0,
           unit_price: Number(it.unit_price) || 0,
           total: Number(it.total) || 0,
-          inventoryId: m.confidence >= 60 ? m.id : null,
-          confidence: m.confidence,
-          addStock: m.confidence >= 60,
+          target,
+          confidence,
+          addStock: true,
           category: itemCat,
           subcategory: itemSub,
+          unitType: guessUnit(product),
+          shelfLife: "",
+          foodCategory: it.category ?? "",
         };
       });
       setVendor(parsed.vendor || "");
