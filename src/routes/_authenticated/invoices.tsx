@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { db, type Invoice, type InventoryItem } from "@/lib/db";
+import { db, type Invoice, type InventoryItem, type FoodItem } from "@/lib/db";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useInventory } from "@/lib/queries";
@@ -65,11 +65,36 @@ interface LineRow {
   qty: number;
   unit_price: number;
   total: number;
-  inventoryId: string | null;
+  // target: "" (skip) | "spirit:<id>" | "food:<id>" | "new"
+  target: string;
   confidence: number;
   addStock: boolean;
   category: string;
   subcategory: string;
+  // new food-item fields (used when target === "new")
+  unitType: string;
+  shelfLife: string;
+  foodCategory: string;
+}
+
+function guessUnit(s: string): string {
+  const m = s.toLowerCase();
+  if (/\bkg\b|kilo/.test(m)) return "Kg";
+  if (/\bg\b|gram/.test(m)) return "g";
+  if (/\bcl\b/.test(m)) return "cl";
+  if (/\bml\b/.test(m)) return "ml";
+  if (/\bl\b|litro|liter/.test(m)) return "L";
+  return "un";
+}
+
+function parseTarget(t: string): {
+  kind: "spirit" | "food" | "new" | "none";
+  id: string | null;
+} {
+  if (t === "new") return { kind: "new", id: null };
+  if (t.startsWith("spirit:")) return { kind: "spirit", id: t.slice(7) };
+  if (t.startsWith("food:")) return { kind: "food", id: t.slice(5) };
+  return { kind: "none", id: null };
 }
 
 function InvoicesPage() {
