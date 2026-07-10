@@ -286,28 +286,83 @@ function InvoicesPage() {
         qc.invalidateQueries({ queryKey: ["vendor_categories"] });
       }
 
-      // Auto-update stock for confirmed, matched line items
-      const stockRows = rows.filter((r) => r.addStock && r.inventoryId && r.qty > 0);
+      // Auto-update stock and auto-create new food items for confirmed lines
+      const stockRows = rows.filter((r) => {
+        const t = parseTarget(r.target);
+        return r.addStock && r.qty > 0 && t.kind !== "none";
+      });
       let stockUpdates = 0;
+      let created = 0;
       const changes: StockChange[] = [];
       for (const r of stockRows) {
-        const inv = inventory.find((i) => i.id === r.inventoryId);
-        if (!inv) continue;
-        const newStock = Number(inv.current_stock) + Number(r.qty);
-        const patch: Record<string, number> = { current_stock: newStock };
-        if (r.unit_price > 0) patch.unit_cost = r.unit_price;
-        const { error: upErr } = await db
-          .from("inventory")
-          .update(patch)
-          .eq("id", r.inventoryId);
-        if (upErr) throw upErr;
-        stockUpdates++;
-        changes.push({
-          name: inv.name,
-          qty: Number(r.qty),
-          newStock,
-          status: computeStatus(newStock, Number(inv.par_level)),
-        });
+        const t = parseTarget(r.target);
+
+        if (t.kind === "spirit") {
+          const inv = inventory.find((i) => i.id === t.id);
+          if (!inv) continue;
+          const newStock = Number(inv.current_stock) + Number(r.qty);
+          const patch: Record<string, number> = { current_stock: newStock };
+          if (r.unit_price > 0) patch.unit_cost = r.unit_price;
+          const { error: upErr } = await db
+            .from("inventory")
+            .update(patch)
+            .eq("id", t.id);
+          if (upErr) throw upErr;
+          stockUpdates++;
+          changes.push({
+            name: inv.name,
+            qty: Number(r.qty),
+            newStock,
+            status: computeStatus(newStock, Number(inv.par_level)),
+          });
+        } else if (t.kind === "food") {
+          const f = food.find((x) => x.id === t.id);
+          if (!f) continue;
+          const newStock = Number(f.current_stock) + Number(r.qty);
+          const patch: Record<string, unknown> = {
+            current_stock: newStock,
+            last_invoice_id: inserted?.id ?? null,
+            last_purchase_date: date,
+          };
+          if (r.unit_price > 0) patch.unit_cost = r.unit_price;
+          const { error: upErr } = await db
+            .from("food_inventory")
+            .update(patch)
+            .eq("id", t.id);
+          if (upErr) throw upErr;
+          stockUpdates++;
+          changes.push({
+            name: f.name,
+            qty: Number(r.qty),
+            unit: f.unit_type,
+            newStock,
+            status: computeStatus(newStock, Number(f.par_level)),
+          });
+        } else if (t.kind === "new") {
+          const name = r.product.trim();
+          if (!name) continue;
+          const shelf = r.shelfLife.trim() ? Number(r.shelfLife) : null;
+          const { error: insErr } = await db.from("food_inventory").insert({
+            name,
+            category: r.foodCategory.trim() || r.category || "Food",
+            unit_type: r.unitType || "un",
+            current_stock: Number(r.qty),
+            par_level: Number(r.qty),
+            unit_cost: Number(r.unit_price) || 0,
+            last_invoice_id: inserted?.id ?? null,
+            last_purchase_date: date,
+            shelf_life_days: shelf,
+          });
+          if (insErr) throw insErr;
+          created++;
+          changes.push({
+            name: `🆕 ${name} (new item)`,
+            qty: Number(r.qty),
+            unit: r.unitType || "un",
+            newStock: Number(r.qty),
+            status: computeStatus(Number(r.qty), Number(r.qty)),
+          });
+        }
       }
 
       // Fire in-app stock update notification on every confirmed invoice
