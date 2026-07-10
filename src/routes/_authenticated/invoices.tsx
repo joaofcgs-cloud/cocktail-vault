@@ -688,16 +688,24 @@ function InvoicesPage() {
                 )}
 
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <Label>Line items → inventory</Label>
-                    {flagged > 0 && (
-                      <span className="flex items-center gap-1 text-xs font-semibold text-red">
-                        <Flag className="h-3.5 w-3.5" /> {flagged} unmatched
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {newItems > 0 && (
+                        <span className="flex items-center gap-1 text-xs font-semibold text-purple">
+                          🆕 {newItems} new
+                        </span>
+                      )}
+                      {flagged > 0 && (
+                        <span className="flex items-center gap-1 text-xs font-semibold text-red">
+                          <Flag className="h-3.5 w-3.5" /> {flagged} skipped
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Matched items with “Add” checked will bump inventory stock on save.
+                    Unmatched items are auto-created in Food inventory. Items with
+                    “Add” checked update stock (or create the new item) on save.
                   </p>
 
                   {rows.map((r, i) => (
@@ -712,25 +720,78 @@ function InvoicesPage() {
                           placeholder="Product name"
                           className="h-9 text-sm"
                         />
-                        <ConfidenceBadge confidence={r.confidence} matched={!!r.inventoryId} />
+                        <ConfidenceBadge
+                          confidence={r.confidence}
+                          target={r.target}
+                        />
                       </div>
                       <select
-                        value={r.inventoryId ?? ""}
+                        value={r.target}
                         onChange={(e) =>
                           updateRow(i, {
-                            inventoryId: e.target.value || null,
-                            addStock: !!e.target.value,
+                            target: e.target.value,
+                            addStock: e.target.value !== "",
                           })
                         }
                         className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
                       >
-                        <option value="">— No inventory match —</option>
-                        {inventory.map((inv: InventoryItem) => (
-                          <option key={inv.id} value={inv.id}>
-                            {inv.name}
-                          </option>
-                        ))}
+                        <option value="new">🆕 Create new food item</option>
+                        <option value="">— Skip (no match) —</option>
+                        <optgroup label="Spirits">
+                          {inventory.map((inv: InventoryItem) => (
+                            <option key={inv.id} value={`spirit:${inv.id}`}>
+                              {inv.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Food">
+                          {food.map((f: FoodItem) => (
+                            <option key={f.id} value={`food:${f.id}`}>
+                              {f.name}
+                            </option>
+                          ))}
+                        </optgroup>
                       </select>
+                      {parseTarget(r.target).kind === "new" && (
+                        <div className="grid grid-cols-3 gap-2 rounded-md border border-purple/30 bg-purple/10 p-2">
+                          <div className="col-span-3 text-[11px] font-semibold text-purple">
+                            🆕 Will be created in Food inventory
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase text-muted-foreground">Food category</span>
+                            <Input
+                              value={r.foodCategory}
+                              onChange={(e) => updateRow(i, { foodCategory: e.target.value })}
+                              placeholder="e.g. Herbs"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase text-muted-foreground">Unit</span>
+                            <select
+                              value={r.unitType}
+                              onChange={(e) => updateRow(i, { unitType: e.target.value })}
+                              className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                            >
+                              {["un", "Kg", "g", "L", "ml", "cl"].map((u) => (
+                                <option key={u} value={u}>
+                                  {u}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase text-muted-foreground">Shelf life (days)</span>
+                            <Input
+                              type="number"
+                              value={r.shelfLife}
+                              onChange={(e) => updateRow(i, { shelfLife: e.target.value })}
+                              placeholder="e.g. 5"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
                         <div className="flex-1">
                           <span className="text-[10px] uppercase text-muted-foreground">Qty</span>
@@ -757,7 +818,7 @@ function InvoicesPage() {
                           <input
                             type="checkbox"
                             checked={r.addStock}
-                            disabled={!r.inventoryId}
+                            disabled={parseTarget(r.target).kind === "none"}
                             onChange={(e) => updateRow(i, { addStock: e.target.checked })}
                             className="h-5 w-5 accent-teal"
                           />
