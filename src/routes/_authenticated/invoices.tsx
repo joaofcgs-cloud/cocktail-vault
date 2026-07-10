@@ -1073,11 +1073,18 @@ function InvoicesPage() {
   );
 }
 
-function ConfidenceBadge({ confidence, matched }: { confidence: number; matched: boolean }) {
-  if (!matched) {
+function ConfidenceBadge({ confidence, target }: { confidence: number; target: string }) {
+  if (target === "new") {
+    return (
+      <span className="flex shrink-0 items-center gap-1 rounded-full bg-purple/15 px-2 py-1 text-[11px] font-semibold text-purple">
+        🆕 New item
+      </span>
+    );
+  }
+  if (target === "") {
     return (
       <span className="flex shrink-0 items-center gap-1 rounded-full bg-red/15 px-2 py-1 text-[11px] font-semibold text-red">
-        <Flag className="h-3 w-3" /> Unknown
+        <Flag className="h-3 w-3" /> Skipped
       </span>
     );
   }
