@@ -101,6 +101,17 @@ function InvoicesPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const { data: inventory = [] } = useInventory();
+  const { data: food = [] } = useQuery({
+    queryKey: ["food_inventory"],
+    queryFn: async (): Promise<FoodItem[]> => {
+      const { data, error } = await db
+        .from("food_inventory")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
   const [open, setOpen] = useState(false);
   const [vendor, setVendor] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -189,7 +200,20 @@ function InvoicesPage() {
   function addBlankRow() {
     setRows((rs) => [
       ...rs,
-      { product: "", qty: 1, unit_price: 0, total: 0, inventoryId: null, confidence: 0, addStock: true, category: "", subcategory: "" },
+      {
+        product: "",
+        qty: 1,
+        unit_price: 0,
+        total: 0,
+        target: "new",
+        confidence: 0,
+        addStock: true,
+        category: "",
+        subcategory: "",
+        unitType: "un",
+        shelfLife: "",
+        foodCategory: "",
+      },
     ]);
   }
 
