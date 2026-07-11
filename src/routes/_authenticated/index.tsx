@@ -168,32 +168,6 @@ function KpiTarget({
   );
 }
 
-function Kpi({
-  label,
-  value,
-  icon: Icon,
-  tone,
-}: {
-  label: string;
-  value: string;
-  icon: React.ElementType;
-  tone: string;
-}) {
-  return (
-    <Card className="border-border bg-card p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {label}
-        </span>
-        <Icon className="h-4 w-4" style={{ color: tone }} />
-      </div>
-      <p className="mt-2 text-2xl font-black" style={{ color: tone }}>
-        {value}
-      </p>
-    </Card>
-  );
-}
-
 function Overview() {
   const { data: inv = [] } = useInventory();
   const { data: cocktails = [] } = useCocktails();
