@@ -22,12 +22,7 @@ import {
 } from "@/lib/insights";
 import {
   AlertTriangle,
-  PackageX,
-  TriangleAlert,
   ArrowUpCircle,
-  Wallet,
-  Boxes,
-  Percent,
   Users,
   Receipt,
   ChevronRight,
