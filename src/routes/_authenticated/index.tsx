@@ -7,21 +7,31 @@ import {
   type Cocktail,
   type PayrollRecord,
   type ServiceCost,
+  type FoodItem,
+  type Invoice,
 } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { eur, num, marginColor } from "@/lib/format";
 import {
+  buildInsights,
+  computeSpend,
+  COST_TARGETS,
+  type Insight,
+  type Severity,
+} from "@/lib/insights";
+import {
   AlertTriangle,
-  PackageX,
-  TriangleAlert,
   ArrowUpCircle,
-  Wallet,
-  Boxes,
-  Percent,
   Users,
   Receipt,
   ChevronRight,
+  Sparkles,
+  ArrowUpRight,
+  ArrowDownRight,
+  Upload,
+  Scale,
+  Martini,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -52,17 +62,90 @@ function useCocktails() {
     },
   });
 }
+function useFood() {
+  return useQuery({
+    queryKey: ["food_inventory"],
+    queryFn: async (): Promise<FoodItem[]> => {
+      const { data, error } = await db.from("food_inventory").select("*").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+function useInvoices() {
+  return useQuery({
+    queryKey: ["invoices"],
+    queryFn: async (): Promise<Invoice[]> => {
+      const { data, error } = await db.from("invoices").select("*").order("date");
+      if (error) throw error;
+      return data;
+    },
+  });
+}
 
-function Kpi({
+const SEV_BORDER: Record<Severity, string> = {
+  critical: "border-l-red",
+  warning: "border-l-orange",
+  info: "border-l-teal",
+};
+const SEV_BTN: Record<Severity, string> = {
+  critical: "bg-red/15 text-red hover:bg-red/25",
+  warning: "bg-orange/15 text-orange hover:bg-orange/25",
+  info: "bg-teal/15 text-teal hover:bg-teal/25",
+};
+
+function InsightCard({ insight }: { insight: Insight }) {
+  return (
+    <Card
+      className={`w-[300px] shrink-0 border-border border-l-4 bg-card p-4 md:w-[340px] ${SEV_BORDER[insight.severity]}`}
+    >
+      <div className="mb-1 flex items-start gap-2">
+        <span className="text-lg leading-none">{insight.icon}</span>
+        <p className="text-sm font-bold leading-snug">{insight.title}</p>
+      </div>
+      <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+        {insight.description}
+      </p>
+      {insight.chips && insight.chips.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {insight.chips.map((c) => (
+            <span
+              key={c}
+              className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+            >
+              {c}
+            </span>
+          ))}
+        </div>
+      )}
+      <Link
+        to={insight.action.to}
+        className={`inline-flex min-h-[36px] items-center rounded-lg px-3 text-xs font-bold transition-colors ${SEV_BTN[insight.severity]}`}
+      >
+        {insight.action.label}
+      </Link>
+    </Card>
+  );
+}
+
+function toneForPct(pct: number, t: { warning: number; alert: number }): string {
+  if (pct >= t.alert) return "var(--red)";
+  if (pct >= t.warning) return "var(--orange)";
+  return "var(--green)";
+}
+
+function KpiTarget({
   label,
   value,
-  icon: Icon,
+  sub,
   tone,
+  dot,
 }: {
   label: string;
   value: string;
-  icon: React.ElementType;
+  sub?: React.ReactNode;
   tone: string;
+  dot?: string;
 }) {
   return (
     <Card className="border-border bg-card p-4">
@@ -70,11 +153,17 @@ function Kpi({
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {label}
         </span>
-        <Icon className="h-4 w-4" style={{ color: tone }} />
+        {dot && (
+          <span
+            className="h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: dot }}
+          />
+        )}
       </div>
       <p className="mt-2 text-2xl font-black" style={{ color: tone }}>
         {value}
       </p>
+      {sub && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
     </Card>
   );
 }
@@ -82,6 +171,8 @@ function Kpi({
 function Overview() {
   const { data: inv = [] } = useInventory();
   const { data: cocktails = [] } = useCocktails();
+  const { data: food = [] } = useFood();
+  const { data: invoices = [] } = useInvoices();
   const { isOwner } = useAuth();
 
   const { data: payroll = [] } = useQuery({
@@ -117,6 +208,17 @@ function Overview() {
       0,
     );
 
+  const spend = computeSpend(invoices);
+  const spendDelta =
+    spend.lastMonth > 0
+      ? ((spend.thisMonth - spend.lastMonth) / spend.lastMonth) * 100
+      : null;
+  const purchTotal = spend.food + spend.beverage + spend.operating || 1;
+  const foodPct = (spend.food / purchTotal) * 100;
+  const bevPct = (spend.beverage / purchTotal) * 100;
+
+  const insights = buildInsights({ inventory: inv, food, cocktails, invoices });
+
   const stockValue = inv.reduce(
     (s, i) => s + i.current_stock * i.unit_cost,
     0,
@@ -130,6 +232,12 @@ function Overview() {
     cocktails.length > 0
       ? cocktails.reduce((s, c) => s + c.margin_percent, 0) / cocktails.length
       : 0;
+  const marginTone =
+    avgMargin >= COST_TARGETS.margin.good
+      ? "var(--green)"
+      : avgMargin >= COST_TARGETS.margin.warning
+        ? "var(--orange)"
+        : "var(--red)";
 
   const topValue = [...inv]
     .sort(
@@ -148,42 +256,107 @@ function Overview() {
           Overview
         </h1>
         <p className="text-sm text-muted-foreground">
-          Live snapshot of your bar.
+          What changed in your costs — and what to do about it.
         </p>
       </div>
 
-      {/* KPI cards */}
+      {/* AI Cost Manager — this week's insights */}
+      <Card className="border-border bg-card p-4 md:p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <div className="grid h-7 w-7 place-items-center rounded-lg bg-teal/15 text-teal">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <h2 className="text-sm font-bold uppercase tracking-wide">
+            AI Cost Manager · This Week
+          </h2>
+        </div>
+        {insights.length > 0 ? (
+          <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+            {insights.map((i) => (
+              <InsightCard key={i.id} insight={i} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No alerts right now. Your costs are on track! 🎉
+          </p>
+        )}
+      </Card>
+
+      {/* Financial KPIs vs targets */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-        <Kpi
-          label="Stock Value"
-          value={eur(stockValue)}
-          icon={Wallet}
-          tone="var(--teal)"
-        />
-        <Kpi
-          label="Products"
-          value={String(inv.length)}
-          icon={Boxes}
+        <KpiTarget
+          label="Purchases / mo"
+          value={eur(spend.thisMonth)}
           tone="var(--foreground)"
+          sub={
+            spendDelta === null ? (
+              "No prior month"
+            ) : (
+              <span
+                className="inline-flex items-center gap-0.5 font-semibold"
+                style={{ color: spendDelta > 0 ? "var(--red)" : "var(--green)" }}
+              >
+                {spendDelta > 0 ? (
+                  <ArrowUpRight className="h-3 w-3" />
+                ) : (
+                  <ArrowDownRight className="h-3 w-3" />
+                )}
+                {num(Math.abs(spendDelta))}% vs last mo
+              </span>
+            )
+          }
         />
-        <Kpi
-          label="Out of Stock"
-          value={String(out.length)}
-          icon={PackageX}
-          tone="var(--red)"
+        <KpiTarget
+          label="Food Cost"
+          value={`${num(foodPct)}%`}
+          tone={toneForPct(foodPct, COST_TARGETS.food)}
+          dot={toneForPct(foodPct, COST_TARGETS.food)}
+          sub={`target ${COST_TARGETS.food.target}% · ${eur(spend.food)}`}
         />
-        <Kpi
-          label="Low Stock"
-          value={String(low.length)}
-          icon={TriangleAlert}
-          tone="var(--orange)"
+        <KpiTarget
+          label="Beverage Cost"
+          value={`${num(bevPct)}%`}
+          tone={toneForPct(bevPct, COST_TARGETS.beverage)}
+          dot={toneForPct(bevPct, COST_TARGETS.beverage)}
+          sub={`target ${COST_TARGETS.beverage.target}% · ${eur(spend.beverage)}`}
         />
-        <Kpi
+        <KpiTarget
           label="Avg Margin"
           value={`${num(avgMargin)}%`}
-          icon={Percent}
-          tone="var(--green)"
+          tone={marginTone}
+          dot={marginTone}
+          sub={`target ${COST_TARGETS.margin.good}%`}
         />
+        <KpiTarget
+          label="Stock Value"
+          value={eur(stockValue)}
+          tone="var(--teal)"
+          sub={`${inv.length} products`}
+        />
+      </div>
+
+      {/* AI interpretation */}
+      <Card className="border-border bg-card p-4">
+        <p className="text-sm leading-relaxed">
+          <span className="font-bold text-teal">AI read: </span>
+          {spendDelta !== null && Math.abs(spendDelta) >= 1
+            ? `Purchases are ${spendDelta > 0 ? "up" : "down"} ${num(Math.abs(spendDelta))}% vs last month (${eur(spend.thisMonth)}). `
+            : `You've spent ${eur(spend.thisMonth)} on purchases this month. `}
+          {spend.food + spend.beverage > 0 &&
+            `Food is ${num(foodPct)}% and beverage ${num(bevPct)}% of purchases. `}
+          {insights.filter((i) => i.severity === "critical").length > 0
+            ? `${insights.filter((i) => i.severity === "critical").length} critical item${insights.filter((i) => i.severity === "critical").length > 1 ? "s" : ""} need attention above.`
+            : "No critical issues detected — keep it up."}
+        </p>
+      </Card>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <QuickAction to="/invoices" icon={Upload} label="Upload Invoice" tone="var(--teal)" />
+        <QuickAction to="/variance" icon={Scale} label="Check Variance" tone="var(--purple)" ownerOnly isOwner={isOwner} />
+        <QuickAction to="/calculators" icon={Martini} label="Review Margins" tone="var(--green)" />
+        <QuickAction to="/stock" icon={ArrowUpCircle} label="Order Low Stock" tone="var(--orange)" />
       </div>
 
       {/* Cost summary cards (owner only) */}
@@ -326,6 +499,37 @@ function Overview() {
         </Card>
       </div>
     </div>
+  );
+}
+
+function QuickAction({
+  to,
+  icon: Icon,
+  label,
+  tone,
+  ownerOnly,
+  isOwner,
+}: {
+  to: string;
+  icon: React.ElementType;
+  label: string;
+  tone: string;
+  ownerOnly?: boolean;
+  isOwner?: boolean;
+}) {
+  if (ownerOnly && !isOwner) return null;
+  return (
+    <Link to={to} className="block">
+      <Card className="flex min-h-[64px] items-center gap-3 border-border bg-card p-4 transition-colors hover:border-teal/40">
+        <div
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl"
+          style={{ backgroundColor: `color-mix(in srgb, ${tone} 15%, transparent)`, color: tone }}
+        >
+          <Icon className="h-4 w-4" />
+        </div>
+        <span className="text-sm font-bold">{label}</span>
+      </Card>
+    </Link>
   );
 }
 
