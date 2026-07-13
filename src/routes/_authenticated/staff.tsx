@@ -692,7 +692,7 @@ function StaffPage() {
   );
 }
 
-function MiniKpi({ label, value, tone }: { label: string; value: string; tone: string }) {
+function MiniKpi({ label, value, tone, sub }: { label: string; value: string; tone: string; sub?: string }) {
   return (
     <Card className="border-border bg-card p-4">
       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -701,6 +701,50 @@ function MiniKpi({ label, value, tone }: { label: string; value: string; tone: s
       <p className="mt-2 text-xl font-black" style={{ color: tone }}>
         {value}
       </p>
+      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+    </Card>
+  );
+}
+
+function StaffCard({ s, company }: { s: Staff; company?: Company }) {
+  return (
+    <Card className="border-border bg-card p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-bold">{s.name}</p>
+          <p className="text-xs text-muted-foreground">NIF {s.nif ?? "—"}</p>
+        </div>
+        <span
+          className={`h-2 w-2 shrink-0 rounded-full ${s.active ? "bg-green" : "bg-muted-foreground"}`}
+          title={s.active ? "Active" : "Inactive"}
+        />
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <span
+          className={`inline-block rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${ROLE_BADGE[s.role] ?? "bg-secondary text-muted-foreground"}`}
+        >
+          {s.role}
+        </span>
+        {company && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide"
+            style={{ backgroundColor: `${company.brand_color}22`, color: company.brand_color }}
+          >
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: company.brand_color }} />
+            {barShort(company)}
+          </span>
+        )}
+      </div>
+      <div className="mt-4 flex items-end justify-between">
+        <div>
+          <p className="text-xs text-muted-foreground">Base salary</p>
+          <p className="text-lg font-black text-teal">{eur(s.base_salary)}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-muted-foreground">Hourly</p>
+          <p className="text-sm font-semibold">{eur(s.hourly_rate)}</p>
+        </div>
+      </div>
     </Card>
   );
 }
