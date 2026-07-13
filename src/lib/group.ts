@@ -388,3 +388,169 @@ export function buildSupplierScores(rows: PriceHistoryRow[]): SupplierScore[] {
   }
   return [...map.values()].sort((a, b) => b.monthlySpend - a.monthlySpend);
 }
+
+/* ---------- Invoices ---------- */
+export interface InvoiceItem {
+  product: string;
+  qty: number;
+  unit_price: number;
+  total: number;
+}
+export interface Invoice {
+  id: string;
+  company_id: string | null;
+  vendor: string;
+  supplier: string | null;
+  invoice_date: string | null;
+  total: number;
+  delivery_address: string | null;
+  items: InvoiceItem[];
+  receipt_url: string | null;
+  status: "pending_routing" | "routed" | "confirmed";
+  routing_confidence: number;
+  routing_reason: string | null;
+  is_split: boolean;
+  is_inter_company: boolean;
+  created_at: string;
+}
+export interface InvoiceAllocation {
+  id: string;
+  invoice_id: string;
+  company_id: string;
+  percentage: number;
+  amount: number;
+}
+export interface BusinessEvent {
+  id: string;
+  company_id: string | null;
+  event_type: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export function useInvoices() {
+  return useQuery({
+    queryKey: ["invoices_group"],
+    queryFn: async (): Promise<Invoice[]> => {
+      const { data, error } = await db
+        .from("invoices")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data as Invoice[]).map((r) => ({
+        ...r,
+        items: Array.isArray(r.items) ? r.items : [],
+      }));
+    },
+  });
+}
+export function useInvoiceAllocations() {
+  return useQuery({
+    queryKey: ["invoice_allocations_group"],
+    queryFn: async (): Promise<InvoiceAllocation[]> => {
+      const { data, error } = await db.from("invoice_allocations").select("*");
+      if (error) throw error;
+      return data as InvoiceAllocation[];
+    },
+  });
+}
+export function useBusinessEvents() {
+  return useQuery({
+    queryKey: ["business_events_group"],
+    queryFn: async (): Promise<BusinessEvent[]> => {
+      const { data, error } = await db
+        .from("business_events")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return data as BusinessEvent[];
+    },
+  });
+}
+
+/* ---------- AI routing engine (deterministic, learnable) ---------- */
+export interface RoutingRule {
+  match: string;
+  companyMatch: string; // substring of commercial_name / type
+  reason: string;
+}
+/* Address → company (real group addresses) */
+export const ADDRESS_RULES: RoutingRule[] = [
+  { match: "rua de são nicolau 24", companyMatch: "Baixa", reason: "Delivery address Rua de São Nicolau 24 = Baixa" },
+  { match: "rua da imprensa nacional 46", companyMatch: "Principe", reason: "Delivery address Rua da Imprensa Nacional 46 = Príncipe Real" },
+  { match: "rua de são domingos de benfica 45a", companyMatch: "Lab", reason: "Delivery address Rua de São Domingos de Benfica 45A = Cocktail Lab" },
+];
+/* Vendor delivery-day history */
+export const VENDOR_RULES: { vendor: string; day: number; companyMatch: string; reason: string }[] = [
+  { vendor: "pura", day: 3, companyMatch: "Baixa", reason: "PURA delivers to Baixa on Wednesdays" },
+  { vendor: "pura", day: 1, companyMatch: "Principe", reason: "PURA delivers to Príncipe Real on Mondays" },
+];
+
+export interface RoutingResult {
+  company?: Company;
+  confidence: number;
+  reason: string;
+}
+
+export function routeInvoice(
+  companies: Company[],
+  input: { deliveryAddress?: string; vendor?: string; total?: number; date?: Date },
+): RoutingResult {
+  const byMatch = (m: string) =>
+    companies.find((c) =>
+      m === "Lab"
+        ? c.type === "lab"
+        : c.commercial_name.toLowerCase().includes(m.toLowerCase()),
+    );
+
+  const addr = (input.deliveryAddress ?? "").toLowerCase().trim();
+  // 1) Address match — highest confidence
+  for (const r of ADDRESS_RULES) {
+    if (addr && addr.includes(r.match)) {
+      return { company: byMatch(r.companyMatch), confidence: 95, reason: r.reason };
+    }
+  }
+  // 2) Amount heuristic — bulk to Lab
+  if ((input.total ?? 0) > 1000) {
+    return {
+      company: byMatch("Lab"),
+      confidence: 86,
+      reason: `Amount ${eurCompact(input.total ?? 0)} >€1,000 bulk order → routed to Cocktail Lab`,
+    };
+  }
+  // 3) Vendor delivery-day history
+  const vendor = (input.vendor ?? "").toLowerCase();
+  const dow = (input.date ?? new Date()).getDay();
+  for (const r of VENDOR_RULES) {
+    if (vendor.includes(r.vendor) && dow === r.day) {
+      return { company: byMatch(r.companyMatch), confidence: 88, reason: r.reason };
+    }
+  }
+  // 4) Fallback — low confidence, needs manual routing
+  return {
+    company: undefined,
+    confidence: 45,
+    reason: "No delivery address or vendor pattern matched — manual routing required",
+  };
+}
+
+function eurCompact(n: number) {
+  return `€${Math.round(n)}`;
+}
+
+export const UPLOAD_STAGES = [
+  "Uploading",
+  "Extracting",
+  "Routing",
+  "Matching",
+  "Analyzing",
+  "Complete",
+] as const;
+export type UploadStage = (typeof UPLOAD_STAGES)[number];
+
+export function companyById(companies: Company[], id?: string | null) {
+  return companies.find((c) => c.id === id);
+}

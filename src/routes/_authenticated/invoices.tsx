@@ -1,1103 +1,886 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { db, type Invoice, type InventoryItem, type FoodItem } from "@/lib/db";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/lib/auth";
-import { useInventory } from "@/lib/queries";
-import { bestMatch } from "@/lib/match";
-import {
-  CATEGORIES,
-  subcategoriesFor,
-  vendorKey,
-  normalizeCategory,
-  normalizeSubcategory,
-} from "@/lib/categories";
+import { useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { db } from "@/lib/db";
+import { scanReceipt } from "@/lib/receipt.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Slider } from "@/components/ui/slider";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { eur } from "@/lib/format";
 import {
-  Plus,
-  MessageSquare,
-  ImageUp,
-  Paperclip,
-  ScanLine,
-  Loader2,
-  Check,
-  AlertTriangle,
-  Flag,
-  Pencil,
-} from "lucide-react";
+  useCompanies,
+  useInvoices,
+  useInvoiceAllocations,
+  useBusinessEvents,
+  routeInvoice,
+  companyById,
+  barShort,
+  UPLOAD_STAGES,
+  type Company,
+  type Invoice,
+  type UploadStage,
+} from "@/lib/group";
 import { toast } from "sonner";
-import { useServerFn } from "@tanstack/react-start";
-import { scanReceipt } from "@/lib/receipt.functions";
 import {
-  createStockNotification,
-  type StockChange,
-} from "@/lib/notifications";
-import type { InventoryStatus } from "@/lib/db";
-
-function computeStatus(stock: number, par: number): InventoryStatus {
-  if (stock <= 0) return "OUT";
-  const ratio = par > 0 ? stock / par : 1;
-  if (ratio < 0.5) return "LOW";
-  if (ratio < 1) return "OK";
-  return "GOOD";
-}
+  Upload,
+  Sparkles,
+  History,
+  GitBranch,
+  Activity,
+  ImageUp,
+  Camera,
+  Loader2,
+  CheckCircle2,
+  MapPin,
+  ArrowLeftRight,
+  Split,
+  AlertTriangle,
+  Check,
+  Building2,
+} from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/invoices")({
-  head: () => ({ meta: [{ title: "Invoices — Bar Command Center" }] }),
+  head: () => ({
+    meta: [
+      { title: "Invoices — Imprensa Group Command Center" },
+      {
+        name: "description",
+        content:
+          "AI-routed multi-company invoices for the Plataforma Boémia group: smart routing, split allocations, price alerts and event log.",
+      },
+    ],
+  }),
   component: InvoicesPage,
 });
 
-interface LineRow {
-  product: string;
-  qty: number;
-  unit_price: number;
+const TABS = [
+  { key: "upload", label: "Upload", icon: Upload },
+  { key: "review", label: "AI Review", icon: Sparkles },
+  { key: "history", label: "History", icon: History },
+  { key: "pending", label: "Pending Routing", icon: GitBranch },
+  { key: "events", label: "Event Log", icon: Activity },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
+
+function toDataUrl(file: File): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result as string);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+interface Draft {
+  vendor: string;
+  date: string;
   total: number;
-  // target: "" (skip) | "spirit:<id>" | "food:<id>" | "new"
-  target: string;
+  items: { product: string; qty: number; unit_price: number; total: number }[];
+  deliveryAddress: string;
+  routedCompanyId?: string;
   confidence: number;
-  addStock: boolean;
-  category: string;
-  subcategory: string;
-  // new food-item fields (used when target === "new")
-  unitType: string;
-  shelfLife: string;
-  foodCategory: string;
-}
-
-function guessUnit(s: string): string {
-  const m = s.toLowerCase();
-  if (/\bkg\b|kilo/.test(m)) return "Kg";
-  if (/\bg\b|gram/.test(m)) return "g";
-  if (/\bcl\b/.test(m)) return "cl";
-  if (/\bml\b/.test(m)) return "ml";
-  if (/\bl\b|litro|liter/.test(m)) return "L";
-  return "un";
-}
-
-function parseTarget(t: string): {
-  kind: "spirit" | "food" | "new" | "none";
-  id: string | null;
-} {
-  if (t === "new") return { kind: "new", id: null };
-  if (t.startsWith("spirit:")) return { kind: "spirit", id: t.slice(7) };
-  if (t.startsWith("food:")) return { kind: "food", id: t.slice(5) };
-  return { kind: "none", id: null };
+  reason: string;
+  split: boolean;
 }
 
 function InvoicesPage() {
+  const [tab, setTab] = useState<TabKey>("upload");
   const qc = useQueryClient();
-  const { user } = useAuth();
-  const { data: inventory = [] } = useInventory();
-  const { data: food = [] } = useQuery({
-    queryKey: ["food_inventory"],
-    queryFn: async (): Promise<FoodItem[]> => {
-      const { data, error } = await db
-        .from("food_inventory")
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
-  const [open, setOpen] = useState(false);
-  const [vendor, setVendor] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [total, setTotal] = useState("");
-  const [category, setCategory] = useState("");
-  const [subcategory, setSubcategory] = useState("");
-  const [autoCategorized, setAutoCategorized] = useState(false);
-  const [rows, setRows] = useState<LineRow[]>([]);
-  const [file, setFile] = useState<File | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const runScan = useServerFn(scanReceipt);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editVendor, setEditVendor] = useState("");
-  const [savingVendor, setSavingVendor] = useState(false);
-  const [filterCat, setFilterCat] = useState<string>("all");
+  const { data: companies = [] } = useCompanies();
+  const { data: invoices = [] } = useInvoices();
+  const { data: allocations = [] } = useInvoiceAllocations();
+  const { data: events = [] } = useBusinessEvents();
 
-  const { data: invoices = [] } = useQuery({
-    queryKey: ["invoices"],
-    queryFn: async (): Promise<Invoice[]> => {
-      const { data, error } = await db
-        .from("invoices")
-        .select("*")
-        .order("date", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
+  const [draft, setDraft] = useState<Draft | null>(null);
 
-  // Learned supplier → category mappings (grows as invoices are saved).
-  const { data: learned = [] } = useQuery({
-    queryKey: ["vendor_categories"],
-    queryFn: async () => {
-      const { data, error } = await db.from("vendor_categories").select("*");
-      if (error) throw error;
-      return data as {
-        vendor_key: string;
-        vendor: string;
-        category: string;
-        subcategory: string | null;
-        hits: number;
-      }[];
-    },
-  });
+  const bars = companies.filter((c) => c.type === "bar" || c.type === "lab");
+  const pendingCount = invoices.filter(
+    (i) => i.status === "pending_routing" || i.routing_confidence < 70,
+  ).length;
 
-  // Distinct, sorted list of previously used suppliers for autocomplete.
-  const vendorOptions = Array.from(
-    new Set(invoices.map((i) => i.vendor?.trim()).filter(Boolean) as string[]),
-  ).sort((a, b) => a.localeCompare(b));
-
-  async function saveVendorEdit(id: string) {
-    const name = editVendor.trim();
-    if (!name) {
-      toast.error("Vendor is required.");
-      return;
-    }
-    setSavingVendor(true);
-    try {
-      const { error } = await db.from("invoices").update({ vendor: name }).eq("id", id);
-      if (error) throw error;
-      toast.success("Vendor updated.");
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      setEditingId(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update vendor");
-    } finally {
-      setSavingVendor(false);
-    }
-  }
-
-  function reset() {
-    setVendor("");
-    setDate(new Date().toISOString().slice(0, 10));
-    setTotal("");
-    setCategory("");
-    setSubcategory("");
-    setAutoCategorized(false);
-    setRows([]);
-    setFile(null);
-  }
-
-  function updateRow(i: number, patch: Partial<LineRow>) {
-    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  }
-
-  function addBlankRow() {
-    setRows((rs) => [
-      ...rs,
-      {
-        product: "",
-        qty: 1,
-        unit_price: 0,
-        total: 0,
-        target: "new",
-        confidence: 0,
-        addStock: true,
-        category: "",
-        subcategory: "",
-        unitType: "un",
-        shelfLife: "",
-        foodCategory: "",
-      },
-    ]);
-  }
-
-  function itemsToText(rs: LineRow[]) {
-    return rs
-      .filter((r) => r.product.trim())
-      .map((r) => {
-        const cat = r.category
-          ? ` [${r.category}${r.subcategory ? ` > ${r.subcategory}` : ""}]`
-          : "";
-        return `${r.qty}× ${r.product} @ ${r.unit_price} = ${r.total}${cat}`;
-      })
-      .join("\n");
-  }
-
-  async function submit() {
-    if (!vendor.trim()) {
-      toast.error("Vendor is required.");
-      return;
-    }
-    setBusy(true);
-    try {
-      let receipt_url: string | null = null;
-      if (file) {
-        const path = `${user?.id}/${Date.now()}-${file.name}`;
-        const { error: upErr } = await supabase.storage
-          .from("receipts")
-          .upload(path, file);
-        if (upErr) throw upErr;
-        receipt_url = path;
-      }
-      const { data: inserted, error } = await db
-        .from("invoices")
-        .insert({
-          vendor: vendor.trim(),
-          date,
-          total: parseFloat(total) || 0,
-          items: itemsToText(rows) || null,
-          receipt_url,
-          created_by: user?.id,
-          category: category || null,
-          subcategory: subcategory || null,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-
-      // Learn: remember this supplier's category for future auto-categorisation.
-      if (category && vendor.trim()) {
-        const key = vendorKey(vendor);
-        const existing = learned.find((l) => l.vendor_key === key);
-        if (existing) {
-          await db
-            .from("vendor_categories")
-            .update({
-              vendor: vendor.trim(),
-              category,
-              subcategory: subcategory || null,
-              hits: (existing.hits ?? 1) + 1,
-            })
-            .eq("vendor_key", key);
-        } else {
-          await db.from("vendor_categories").insert({
-            vendor_key: key,
-            vendor: vendor.trim(),
-            category,
-            subcategory: subcategory || null,
-          });
-        }
-        qc.invalidateQueries({ queryKey: ["vendor_categories"] });
-      }
-
-      // Auto-update stock and auto-create new food items for confirmed lines
-      const stockRows = rows.filter((r) => {
-        const t = parseTarget(r.target);
-        return r.addStock && r.qty > 0 && t.kind !== "none";
-      });
-      let stockUpdates = 0;
-      let created = 0;
-      const changes: StockChange[] = [];
-      for (const r of stockRows) {
-        const t = parseTarget(r.target);
-
-        if (t.kind === "spirit") {
-          const inv = inventory.find((i) => i.id === t.id);
-          if (!inv) continue;
-          const newStock = Number(inv.current_stock) + Number(r.qty);
-          const patch: Record<string, number> = { current_stock: newStock };
-          if (r.unit_price > 0) patch.unit_cost = r.unit_price;
-          const { error: upErr } = await db
-            .from("inventory")
-            .update(patch)
-            .eq("id", t.id);
-          if (upErr) throw upErr;
-          stockUpdates++;
-          changes.push({
-            name: inv.name,
-            qty: Number(r.qty),
-            newStock,
-            status: computeStatus(newStock, Number(inv.par_level)),
-          });
-        } else if (t.kind === "food") {
-          const f = food.find((x) => x.id === t.id);
-          if (!f) continue;
-          const newStock = Number(f.current_stock) + Number(r.qty);
-          const patch: Record<string, unknown> = {
-            current_stock: newStock,
-            last_invoice_id: inserted?.id ?? null,
-            last_purchase_date: date,
-          };
-          if (r.unit_price > 0) patch.unit_cost = r.unit_price;
-          const { error: upErr } = await db
-            .from("food_inventory")
-            .update(patch)
-            .eq("id", t.id);
-          if (upErr) throw upErr;
-          stockUpdates++;
-          changes.push({
-            name: f.name,
-            qty: Number(r.qty),
-            unit: f.unit_type,
-            newStock,
-            status: computeStatus(newStock, Number(f.par_level)),
-          });
-        } else if (t.kind === "new") {
-          const name = r.product.trim();
-          if (!name) continue;
-          const shelf = r.shelfLife.trim() ? Number(r.shelfLife) : null;
-          const { error: insErr } = await db.from("food_inventory").insert({
-            name,
-            category: r.foodCategory.trim() || r.category || "Food",
-            unit_type: r.unitType || "un",
-            current_stock: Number(r.qty),
-            par_level: Number(r.qty),
-            unit_cost: Number(r.unit_price) || 0,
-            last_invoice_id: inserted?.id ?? null,
-            last_purchase_date: date,
-            shelf_life_days: shelf,
-          });
-          if (insErr) throw insErr;
-          created++;
-          changes.push({
-            name: `🆕 ${name} (new item)`,
-            qty: Number(r.qty),
-            unit: r.unitType || "un",
-            newStock: Number(r.qty),
-            status: computeStatus(Number(r.qty), Number(r.qty)),
-          });
-        }
-      }
-
-      // Fire in-app stock update notification on every confirmed invoice
-      if (changes.length && user?.id) {
-        await createStockNotification({
-          userId: user.id,
-          vendor: vendor.trim(),
-          date,
-          total: parseFloat(total) || 0,
-          changes,
-          invoiceId: inserted?.id ?? null,
-        });
-        qc.invalidateQueries({ queryKey: ["notifications"] });
-      }
-
-      const parts: string[] = [];
-      if (stockUpdates > 0)
-        parts.push(`stock updated for ${stockUpdates} item${stockUpdates > 1 ? "s" : ""}`);
-      if (created > 0)
-        parts.push(`${created} new food item${created > 1 ? "s" : ""} created`);
-      toast.success(
-        parts.length ? `Invoice saved · ${parts.join(" · ")}.` : "Invoice saved.",
-      );
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      qc.invalidateQueries({ queryKey: ["inventory"] });
-      qc.invalidateQueries({ queryKey: ["food_inventory"] });
-      setOpen(false);
-      reset();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to add invoice");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function openReceipt(path: string) {
-    const { data, error } = await supabase.storage
-      .from("receipts")
-      .createSignedUrl(path, 60);
-    if (error || !data) {
-      toast.error("Could not open receipt.");
-      return;
-    }
-    window.open(data.signedUrl, "_blank");
-  }
-
-  function fileToDataUrl(f: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(f);
+  const refetch = () =>
+    qc.invalidateQueries({ queryKey: ["invoices_group"] }).then(() => {
+      qc.invalidateQueries({ queryKey: ["invoice_allocations_group"] });
+      qc.invalidateQueries({ queryKey: ["business_events_group"] });
     });
-  }
-
-  function fileToText(f: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsText(f);
-    });
-  }
-
-  async function spreadsheetToText(f: File): Promise<string> {
-    const { read, utils } = await import("xlsx");
-    const buf = await f.arrayBuffer();
-    const wb = read(buf, { type: "array" });
-    return wb.SheetNames.map((name) => {
-      const csv = utils.sheet_to_csv(wb.Sheets[name]);
-      return `# Sheet: ${name}\n${csv}`;
-    }).join("\n\n");
-  }
-
-  async function buildScanPayload(f: File) {
-    const name = f.name.toLowerCase();
-    const mime = f.type;
-    const isSpreadsheet =
-      /\.(xlsx|xls|csv|ods|tsv)$/.test(name) ||
-      mime.includes("spreadsheet") ||
-      mime.includes("excel") ||
-      mime === "text/csv";
-    const isText =
-      mime.startsWith("text/") ||
-      /\.(txt|md|csv|tsv|json|xml)$/.test(name);
-
-    if (isSpreadsheet) {
-      if (/\.(xlsx|xls|ods)$/.test(name) || mime.includes("spreadsheet") || mime.includes("excel")) {
-        return { textContent: await spreadsheetToText(f) };
-      }
-      return { textContent: await fileToText(f) };
-    }
-    if (isText) {
-      return { textContent: await fileToText(f) };
-    }
-    // Images and PDFs → send as data URL
-    return { fileDataUrl: await fileToDataUrl(f), mimeType: mime, filename: f.name };
-  }
-
-  async function handleScan(f: File) {
-    setScanning(true);
-    try {
-      const payload = await buildScanPayload(f);
-      const parsed = await runScan({ data: payload });
-      const spiritC = inventory.map((i) => ({ id: i.id, name: i.name }));
-      const foodC = food.map((f) => ({ id: f.id, name: f.name }));
-      const matched: LineRow[] = parsed.items.map((it) => {
-        const product = it.product ?? "";
-        const itemCat = normalizeCategory(it.category) ?? "";
-        const itemSub = normalizeSubcategory(itemCat, it.subcategory) ?? "";
-        const ms = bestMatch(product, spiritC);
-        const mf = bestMatch(product, foodC);
-        // Pick the best existing match; if none is confident, auto-create food.
-        let target = "new";
-        let confidence = Math.max(ms.confidence, mf.confidence);
-        if (ms.confidence >= mf.confidence && ms.confidence >= 60) {
-          target = `spirit:${ms.id}`;
-          confidence = ms.confidence;
-        } else if (mf.confidence >= 60) {
-          target = `food:${mf.id}`;
-          confidence = mf.confidence;
-        }
-        return {
-          product,
-          qty: Number(it.qty) || 0,
-          unit_price: Number(it.unit_price) || 0,
-          total: Number(it.total) || 0,
-          target,
-          confidence,
-          addStock: true,
-          category: itemCat,
-          subcategory: itemSub,
-          unitType: guessUnit(product),
-          shelfLife: "",
-          foodCategory: it.category ?? "",
-        };
-      });
-      setVendor(parsed.vendor || "");
-      if (parsed.date) setDate(parsed.date);
-      setTotal(String(parsed.grand_total || ""));
-      setRows(matched);
-      setFile(f);
-      setOpen(true);
-
-      // Categorise: prefer what we've learned for this supplier, else use AI.
-      const key = vendorKey(parsed.vendor || "");
-      const known = key ? learned.find((l) => l.vendor_key === key) : undefined;
-      let cat = "";
-      let sub = "";
-      if (known) {
-        cat = normalizeCategory(known.category) ?? "";
-        sub = normalizeSubcategory(cat, known.subcategory) ?? "";
-      } else {
-        cat = normalizeCategory(parsed.category) ?? "";
-        sub = normalizeSubcategory(cat, parsed.subcategory) ?? "";
-      }
-      setCategory(cat);
-      setSubcategory(sub);
-      setAutoCategorized(!!cat);
-      toast.success(
-        cat
-          ? `File read — suggested category: ${cat}. Review and save.`
-          : "File read — review matches and save.",
-      );
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Scan failed");
-    } finally {
-      setScanning(false);
-    }
-  }
-
-  const flagged = rows.filter((r) => parseTarget(r.target).kind === "none").length;
-  const newItems = rows.filter((r) => parseTarget(r.target).kind === "new").length;
-
-  const shownInvoices =
-    filterCat === "all"
-      ? invoices
-      : filterCat === "__uncat"
-        ? invoices.filter((i) => !i.category)
-        : invoices.filter((i) => i.category === filterCat);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight md:text-3xl">
-            Invoices
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {invoices.length} recorded
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-md bg-teal px-4 text-sm font-semibold text-primary-foreground">
-            {scanning ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ScanLine className="h-4 w-4" />
-            )}
-            {scanning ? "Reading…" : "Scan / Upload Invoice"}
-            <input
-              type="file"
-              accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,.ods,.tsv,.txt,.md,.json,.xml,text/*,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-              className="hidden"
-              disabled={scanning}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleScan(f);
-                e.target.value = "";
-              }}
-            />
-          </label>
-          <Dialog
-            open={open}
-            onOpenChange={(v) => {
-              setOpen(v);
-              if (!v) reset();
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button variant="outline" className="h-11 gap-2 font-semibold">
-                <Plus className="h-4 w-4" /> Add Manual
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
-                  {rows.length > 0 ? "Review & confirm invoice" : "Add Invoice"}
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="vendor">Vendor</Label>
-                  <Input
-                    id="vendor"
-                    value={vendor}
-                    onChange={(e) => setVendor(e.target.value)}
-                    placeholder="Supplier name"
-                    className="h-11"
-                    list="vendor-suggestions"
-                    autoComplete="off"
-                  />
-                  <datalist id="vendor-suggestions">
-                    {vendorOptions.map((v) => (
-                      <option key={v} value={v} />
-                    ))}
-                  </datalist>
-                  <p className="text-xs text-muted-foreground">
-                    Start typing to pick from saved suppliers and keep names consistent.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="date">Date</Label>
-                    <Input
-                      id="date"
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className="h-11"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="total">Total (€)</Label>
-                    <Input
-                      id="total"
-                      type="number"
-                      step="0.01"
-                      value={total}
-                      onChange={(e) => setTotal(e.target.value)}
-                      placeholder="0.00"
-                      className="h-11"
-                    />
-                  </div>
-                </div>
+    <div className="mx-auto w-full max-w-5xl px-3 pb-24 pt-4 md:px-6">
+      <header className="mb-4">
+        <h1 className="text-xl font-semibold text-foreground md:text-2xl">Invoices</h1>
+        <p className="text-sm text-muted-foreground">
+          AI-routed across the group — every invoice is assigned to a company.
+        </p>
+      </header>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="category">Overall category</Label>
-                    <select
-                      id="category"
-                      value={category}
-                      onChange={(e) => {
-                        setCategory(e.target.value);
-                        setSubcategory("");
-                        setAutoCategorized(false);
-                      }}
-                      className="h-11 w-full rounded-md border border-border bg-background px-2 text-sm"
-                    >
-                      <option value="">— Select —</option>
-                      {CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="subcategory">Subcategory</Label>
-                    <select
-                      id="subcategory"
-                      value={subcategory}
-                      disabled={!category}
-                      onChange={(e) => {
-                        setSubcategory(e.target.value);
-                        setAutoCategorized(false);
-                      }}
-                      className="h-11 w-full rounded-md border border-border bg-background px-2 text-sm disabled:opacity-50"
-                    >
-                      <option value="">— Select —</option>
-                      {subcategoriesFor(category).map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                {autoCategorized && (
-                  <p className="-mt-2 text-xs text-teal">
-                    Auto-categorised — adjust if it's wrong and the app will learn.
-                  </p>
-                )}
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>Line items → inventory</Label>
-                    <div className="flex items-center gap-2">
-                      {newItems > 0 && (
-                        <span className="flex items-center gap-1 text-xs font-semibold text-purple">
-                          🆕 {newItems} new
-                        </span>
-                      )}
-                      {flagged > 0 && (
-                        <span className="flex items-center gap-1 text-xs font-semibold text-red">
-                          <Flag className="h-3.5 w-3.5" /> {flagged} skipped
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Unmatched items are auto-created in Food inventory. Items with
-                    “Add” checked update stock (or create the new item) on save.
-                  </p>
-
-                  {rows.map((r, i) => (
-                    <div
-                      key={i}
-                      className="space-y-2 rounded-lg border border-border bg-secondary/30 p-3"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <Input
-                          value={r.product}
-                          onChange={(e) => updateRow(i, { product: e.target.value })}
-                          placeholder="Product name"
-                          className="h-9 text-sm"
-                        />
-                        <ConfidenceBadge
-                          confidence={r.confidence}
-                          target={r.target}
-                        />
-                      </div>
-                      <select
-                        value={r.target}
-                        onChange={(e) =>
-                          updateRow(i, {
-                            target: e.target.value,
-                            addStock: e.target.value !== "",
-                          })
-                        }
-                        className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                      >
-                        <option value="new">🆕 Create new food item</option>
-                        <option value="">— Skip (no match) —</option>
-                        <optgroup label="Spirits">
-                          {inventory.map((inv: InventoryItem) => (
-                            <option key={inv.id} value={`spirit:${inv.id}`}>
-                              {inv.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="Food">
-                          {food.map((f: FoodItem) => (
-                            <option key={f.id} value={`food:${f.id}`}>
-                              {f.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      </select>
-                      {parseTarget(r.target).kind === "new" && (
-                        <div className="grid grid-cols-3 gap-2 rounded-md border border-purple/30 bg-purple/10 p-2">
-                          <div className="col-span-3 text-[11px] font-semibold text-purple">
-                            🆕 Will be created in Food inventory
-                          </div>
-                          <div>
-                            <span className="text-[10px] uppercase text-muted-foreground">Food category</span>
-                            <Input
-                              value={r.foodCategory}
-                              onChange={(e) => updateRow(i, { foodCategory: e.target.value })}
-                              placeholder="e.g. Herbs"
-                              className="h-9 text-sm"
-                            />
-                          </div>
-                          <div>
-                            <span className="text-[10px] uppercase text-muted-foreground">Unit</span>
-                            <select
-                              value={r.unitType}
-                              onChange={(e) => updateRow(i, { unitType: e.target.value })}
-                              className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                            >
-                              {["un", "Kg", "g", "L", "ml", "cl"].map((u) => (
-                                <option key={u} value={u}>
-                                  {u}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <span className="text-[10px] uppercase text-muted-foreground">Shelf life (days)</span>
-                            <Input
-                              type="number"
-                              value={r.shelfLife}
-                              onChange={(e) => updateRow(i, { shelfLife: e.target.value })}
-                              placeholder="e.g. 5"
-                              className="h-9 text-sm"
-                            />
-                          </div>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1">
-                          <span className="text-[10px] uppercase text-muted-foreground">Qty</span>
-                          <Input
-                            type="number"
-                            step="0.5"
-                            value={r.qty}
-                            onChange={(e) => updateRow(i, { qty: Number(e.target.value) })}
-                            className="h-9 text-sm"
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <span className="text-[10px] uppercase text-muted-foreground">Unit €</span>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={r.unit_price}
-                            onChange={(e) => updateRow(i, { unit_price: Number(e.target.value) })}
-                            className="h-9 text-sm"
-                          />
-                        </div>
-                        <label className="flex cursor-pointer select-none flex-col items-center gap-1 pt-1">
-                          <span className="text-[10px] uppercase text-muted-foreground">Add</span>
-                          <input
-                            type="checkbox"
-                            checked={r.addStock}
-                            disabled={parseTarget(r.target).kind === "none"}
-                            onChange={(e) => updateRow(i, { addStock: e.target.checked })}
-                            className="h-5 w-5 accent-teal"
-                          />
-                        </label>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <span className="text-[10px] uppercase text-muted-foreground">Category</span>
-                          <select
-                            value={r.category}
-                            onChange={(e) =>
-                              updateRow(i, { category: e.target.value, subcategory: "" })
-                            }
-                            className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                          >
-                            <option value="">— Select —</option>
-                            {CATEGORIES.map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase text-muted-foreground">Subcategory</span>
-                          <select
-                            value={r.subcategory}
-                            disabled={!r.category}
-                            onChange={(e) => updateRow(i, { subcategory: e.target.value })}
-                            className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm disabled:opacity-50"
-                          >
-                            <option value="">— Select —</option>
-                            {subcategoriesFor(r.category).map((s) => (
-                              <option key={s} value={s}>
-                                {s}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={addBlankRow}
-                    className="w-full gap-1"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Add line item
-                  </Button>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="receipt">Attached file (optional)</Label>
-                  <label className="flex h-11 cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 text-sm text-muted-foreground">
-                    <ImageUp className="h-4 w-4" />
-                    {file ? file.name : "Attach photo, PDF, Excel or text file"}
-                    <input
-                      id="receipt"
-                      type="file"
-                      accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,.ods,.tsv,.txt,.md,.json,.xml,text/*"
-                      className="hidden"
-                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                    />
-                  </label>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  onClick={submit}
-                  disabled={busy}
-                  className="h-11 w-full font-semibold"
-                >
-                  {busy ? "Saving…" : "Save & update stock"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-
-      {/* Staff instruction box */}
-      <Card className="border-teal/30 bg-teal/10 p-4">
-        <div className="flex gap-3">
-          <MessageSquare className="mt-0.5 h-5 w-5 shrink-0 text-teal" />
-          <div className="text-sm">
-            <p className="font-bold text-teal">Tell staff</p>
-            <p className="text-foreground/90">
-              Snap receipt photo → send to WhatsApp group → manager forwards to
-              admin.
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setFilterCat("all")}
-          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-            filterCat === "all"
-              ? "bg-teal text-primary-foreground"
-              : "bg-secondary text-muted-foreground hover:bg-secondary/70"
-          }`}
-        >
-          All ({invoices.length})
-        </button>
-        {CATEGORIES.map((c) => {
-          const count = invoices.filter((i) => i.category === c).length;
-          if (count === 0) return null;
+      <div className="-mx-3 mb-4 flex gap-1 overflow-x-auto px-3 pb-1 md:mx-0 md:px-0">
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          const active = tab === t.key;
           return (
             <button
-              key={c}
-              type="button"
-              onClick={() => setFilterCat(c)}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                filterCat === c
-                  ? "bg-teal text-primary-foreground"
-                  : "bg-secondary text-muted-foreground hover:bg-secondary/70"
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                active ? "bg-teal/15 text-teal" : "text-muted-foreground hover:bg-card"
               }`}
             >
-              {c} ({count})
+              <Icon className="h-3.5 w-3.5" />
+              {t.label}
+              {t.key === "pending" && pendingCount > 0 && (
+                <span className="ml-1 rounded-full bg-orange/20 px-1.5 text-[10px] text-orange">
+                  {pendingCount}
+                </span>
+              )}
             </button>
           );
         })}
-        {invoices.some((i) => !i.category) && (
-          <button
-            type="button"
-            onClick={() => setFilterCat("__uncat")}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-              filterCat === "__uncat"
-                ? "bg-teal text-primary-foreground"
-                : "bg-secondary text-muted-foreground hover:bg-secondary/70"
-            }`}
-          >
-            Uncategorised ({invoices.filter((i) => !i.category).length})
-          </button>
-        )}
       </div>
 
-      <Card className="border-border bg-card p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3 font-semibold">Vendor</th>
-                <th className="px-4 py-3 font-semibold">Category</th>
-                <th className="px-4 py-3 font-semibold">Date</th>
-                <th className="px-4 py-3 text-right font-semibold">Total</th>
-                <th className="px-4 py-3 font-semibold">Items</th>
-                <th className="px-4 py-3 font-semibold">Receipt</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shownInvoices.map((inv) => (
-                <tr
-                  key={inv.id}
-                  className="border-b border-border/60 last:border-0"
-                >
-                  <td className="px-4 py-3 font-medium">
-                    {editingId === inv.id ? (
-                      <div className="flex items-center gap-1.5">
-                        <Input
-                          value={editVendor}
-                          onChange={(e) => setEditVendor(e.target.value)}
-                          list="vendor-suggestions"
-                          autoComplete="off"
-                          className="h-8 w-40 text-sm"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") saveVendorEdit(inv.id);
-                            if (e.key === "Escape") setEditingId(null);
-                          }}
-                        />
-                        <Button
-                          size="sm"
-                          className="h-8 px-2"
-                          disabled={savingVendor}
-                          onClick={() => saveVendorEdit(inv.id)}
-                        >
-                          <Check className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingId(inv.id);
-                          setEditVendor(inv.vendor ?? "");
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded px-1 -mx-1 text-left hover:bg-secondary/50"
-                        title="Click to edit vendor"
-                      >
-                        {inv.vendor}
-                        <Pencil className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {inv.category ? (
-                      <div className="flex flex-col">
-                        <span className="font-medium">{inv.category}</span>
-                        {inv.subcategory && (
-                          <span className="text-xs text-muted-foreground">
-                            {inv.subcategory}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {inv.date ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                    {eur(inv.total)}
-                  </td>
-                  <td className="max-w-[280px] px-4 py-3 text-muted-foreground">
-                    <span className="line-clamp-2 whitespace-pre-line">{inv.items ?? "—"}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {inv.receipt_url ? (
-                      <button
-                        onClick={() => openReceipt(inv.receipt_url!)}
-                        className="inline-flex items-center gap-1 text-teal hover:underline"
-                      >
-                        <Paperclip className="h-4 w-4" /> View
-                      </button>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {shownInvoices.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-10 text-center text-muted-foreground"
-                  >
-                    No invoices in this category yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      {tab === "upload" && (
+        <UploadTab
+          companies={companies}
+          bars={bars}
+          onExtracted={(d) => {
+            setDraft(d);
+            setTab("review");
+          }}
+        />
+      )}
+      {tab === "review" && (
+        <ReviewTab
+          companies={companies}
+          bars={bars}
+          draft={draft}
+          onDone={async () => {
+            setDraft(null);
+            await refetch();
+            setTab("history");
+          }}
+          onGoUpload={() => setTab("upload")}
+        />
+      )}
+      {tab === "history" && (
+        <HistoryTab companies={companies} invoices={invoices} allocations={allocations} />
+      )}
+      {tab === "pending" && (
+        <PendingTab companies={companies} bars={bars} invoices={invoices} onChange={refetch} />
+      )}
+      {tab === "events" && <EventsTab companies={companies} events={events} />}
+    </div>
+  );
+}
+
+function Dot({ color }: { color: string }) {
+  return <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color }} />;
+}
+
+function CompanyBadge({ company }: { company?: Company }) {
+  if (!company)
+    return (
+      <Badge variant="outline" className="gap-1 text-[10px] text-orange">
+        Unrouted
+      </Badge>
+    );
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium"
+      style={{ background: `${company.brand_color}22`, color: company.brand_color }}
+    >
+      <Dot color={company.brand_color} />
+      {barShort(company)}
+    </span>
+  );
+}
+
+/* ---------- A) Upload ---------- */
+function UploadTab({
+  companies,
+  bars,
+  onExtracted,
+}: {
+  companies: Company[];
+  bars: Company[];
+  onExtracted: (d: Draft) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const camRef = useRef<HTMLInputElement>(null);
+  const scan = useServerFn(scanReceipt);
+  const [stage, setStage] = useState<UploadStage | null>(null);
+  const [preselect, setPreselect] = useState<string>("auto");
+  const [split, setSplit] = useState(false);
+  const [dragging, setDragging] = useState(false);
+
+  async function handleFile(file: File) {
+    try {
+      setStage("Uploading");
+      const dataUrl = await toDataUrl(file);
+      setStage("Extracting");
+      const parsed = await scan({
+        data: { fileDataUrl: dataUrl, mimeType: file.type, filename: file.name },
+      });
+      setStage("Routing");
+      const addr = "";
+      const route = routeInvoice(companies, {
+        deliveryAddress: addr,
+        vendor: parsed.vendor,
+        total: parsed.grand_total,
+        date: parsed.date ? new Date(parsed.date) : new Date(),
+      });
+      setStage("Matching");
+      await new Promise((r) => setTimeout(r, 300));
+      setStage("Analyzing");
+      await new Promise((r) => setTimeout(r, 300));
+      setStage("Complete");
+      const forced = preselect !== "auto" ? preselect : route.company?.id;
+      onExtracted({
+        vendor: parsed.vendor,
+        date: parsed.date,
+        total: parsed.grand_total,
+        items: parsed.items.map((i) => ({
+          product: i.product,
+          qty: i.qty,
+          unit_price: i.unit_price,
+          total: i.total,
+        })),
+        deliveryAddress: addr,
+        routedCompanyId: forced,
+        confidence: preselect !== "auto" ? 100 : route.confidence,
+        reason:
+          preselect !== "auto"
+            ? "Manually pre-selected on upload"
+            : route.reason,
+        split,
+      });
+    } catch (e) {
+      console.error(e);
+      toast.error("Could not read that file. Try a clearer photo or PDF.");
+      setStage(null);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*,application/pdf"
+        hidden
+        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+      />
+      <input
+        ref={camRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+      />
+
+      <Card className="p-4">
+        <div className="mb-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              Company (optional override)
+            </label>
+            <Select value={preselect} onValueChange={setPreselect}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto-route with AI</SelectItem>
+                {bars.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {barShort(b)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-end">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+              <Checkbox checked={split} onCheckedChange={(v) => setSplit(!!v)} />
+              Split invoice across bars (shared cost)
+            </label>
+          </div>
         </div>
+
+        {stage ? (
+          <UploadProgress stage={stage} />
+        ) : (
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              const f = e.dataTransfer.files?.[0];
+              if (f) handleFile(f);
+            }}
+            className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
+              dragging ? "border-teal bg-teal/5" : "border-border"
+            }`}
+          >
+            <ImageUp className="mb-2 h-8 w-8 text-muted-foreground" />
+            <p className="text-sm text-foreground">Drop an invoice photo or PDF</p>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Vendor, date &amp; prices are always AI-extracted — never typed.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
+                <ImageUp className="mr-1 h-4 w-4" /> Gallery / File
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => camRef.current?.click()}>
+                <Camera className="mr-1 h-4 w-4" /> Camera
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );
 }
 
-function ConfidenceBadge({ confidence, target }: { confidence: number; target: string }) {
-  if (target === "new") {
-    return (
-      <span className="flex shrink-0 items-center gap-1 rounded-full bg-purple/15 px-2 py-1 text-[11px] font-semibold text-purple">
-        🆕 New item
-      </span>
-    );
-  }
-  if (target === "") {
-    return (
-      <span className="flex shrink-0 items-center gap-1 rounded-full bg-red/15 px-2 py-1 text-[11px] font-semibold text-red">
-        <Flag className="h-3 w-3" /> Skipped
-      </span>
-    );
-  }
-  if (confidence >= 80) {
-    return (
-      <span className="flex shrink-0 items-center gap-1 rounded-full bg-green/15 px-2 py-1 text-[11px] font-semibold text-green">
-        <Check className="h-3 w-3" /> {confidence}%
-      </span>
-    );
-  }
+function UploadProgress({ stage }: { stage: UploadStage }) {
+  const idx = UPLOAD_STAGES.indexOf(stage);
   return (
-    <span className="flex shrink-0 items-center gap-1 rounded-full bg-orange/15 px-2 py-1 text-[11px] font-semibold text-orange">
-      <AlertTriangle className="h-3 w-3" /> {confidence}%
-    </span>
+    <div className="space-y-2 py-4">
+      {UPLOAD_STAGES.map((s, i) => {
+        const done = i < idx || stage === "Complete";
+        const active = i === idx && stage !== "Complete";
+        return (
+          <div key={s} className="flex items-center gap-3 text-sm">
+            {done ? (
+              <CheckCircle2 className="h-4 w-4 text-green" />
+            ) : active ? (
+              <Loader2 className="h-4 w-4 animate-spin text-teal" />
+            ) : (
+              <span className="h-4 w-4 rounded-full border border-border" />
+            )}
+            <span className={done ? "text-green" : active ? "text-foreground" : "text-muted-foreground"}>
+              {s}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------- B) AI Review ---------- */
+function ReviewTab({
+  companies,
+  bars,
+  draft,
+  onDone,
+  onGoUpload,
+}: {
+  companies: Company[];
+  bars: Company[];
+  draft: Draft | null;
+  onDone: () => void;
+  onGoUpload: () => void;
+}) {
+  const [routedId, setRoutedId] = useState<string | undefined>(draft?.routedCompanyId);
+  const [splitMode, setSplitMode] = useState(draft?.split ?? false);
+  const [prPct, setPrPct] = useState(50);
+  const [saving, setSaving] = useState(false);
+
+  const barPair = bars.filter((b) => b.type === "bar");
+  const pr = barPair[0];
+  const baixa = barPair[1];
+
+  if (!draft) {
+    return (
+      <Card className="p-6 text-center">
+        <p className="text-sm text-muted-foreground">No invoice in review.</p>
+        <Button className="mt-3" size="sm" onClick={onGoUpload}>
+          Upload an invoice
+        </Button>
+      </Card>
+    );
+  }
+
+  const routed = companyById(companies, routedId);
+  const conf = routedId === draft.routedCompanyId ? draft.confidence : 100;
+
+  async function save() {
+    if (!draft) return;
+    setSaving(true);
+    try {
+      const status = splitMode || routedId ? "confirmed" : "pending_routing";
+      const { data: inv, error } = await db
+        .from("invoices")
+        .insert({
+          company_id: splitMode ? null : routedId ?? null,
+          vendor: draft.vendor || "Unknown vendor",
+          supplier: draft.vendor || null,
+          invoice_date: draft.date || null,
+          total: draft.total,
+          delivery_address: draft.deliveryAddress || null,
+          items: draft.items,
+          status,
+          routing_confidence: splitMode ? 100 : conf,
+          routing_reason: splitMode ? "Split across bars (shared cost)" : draft.reason,
+          is_split: splitMode,
+          is_inter_company: (draft.vendor || "").toLowerCase().includes("lab"),
+        })
+        .select()
+        .single();
+      if (error) throw error;
+
+      if (splitMode && pr && baixa) {
+        const prAmt = +(draft.total * (prPct / 100)).toFixed(2);
+        await db.from("invoice_allocations").insert([
+          { invoice_id: inv.id, company_id: pr.id, percentage: prPct, amount: prAmt },
+          {
+            invoice_id: inv.id,
+            company_id: baixa.id,
+            percentage: 100 - prPct,
+            amount: +(draft.total - prAmt).toFixed(2),
+          },
+        ]);
+        await db.from("business_events").insert({
+          company_id: pr.id,
+          event_type: "COST_ALLOCATED",
+          entity_type: "invoice",
+          entity_id: inv.id,
+          payload: { split: `${prPct}/${100 - prPct}`, amount: draft.total },
+        });
+      } else if (routedId) {
+        await db.from("business_events").insert({
+          company_id: routedId,
+          event_type: "INVOICE_UPLOADED",
+          entity_type: "invoice",
+          entity_id: inv.id,
+          payload: { vendor: draft.vendor },
+        });
+      }
+      toast.success(
+        splitMode
+          ? "Split invoice saved with allocations"
+          : routed
+            ? `Routed to ${barShort(routed)}`
+            : "Saved to Pending Routing",
+      );
+      onDone();
+    } catch (e) {
+      console.error(e);
+      toast.error("Could not save invoice.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-foreground">{draft.vendor || "Unknown vendor"}</p>
+            <p className="text-xs text-muted-foreground">{draft.date || "No date"} · {eur(draft.total)}</p>
+          </div>
+          <Badge variant="outline" className="text-[10px]">
+            AI-extracted
+          </Badge>
+        </div>
+        <div className="space-y-1 rounded-lg bg-background/50 p-2">
+          {draft.items.map((it, i) => (
+            <div key={i} className="flex justify-between text-xs">
+              <span className="text-muted-foreground">
+                {it.qty}× {it.product}
+              </span>
+              <span className="text-foreground">{eur(it.total)}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {!splitMode && (
+        <Card className={`p-4 ${routed ? "border-teal/30 bg-teal/5" : "border-orange/30 bg-orange/5"}`}>
+          <div className="mb-2 flex items-center gap-2">
+            <MapPin className={`h-4 w-4 ${routed ? "text-teal" : "text-orange"}`} />
+            <h2 className="text-sm font-semibold text-foreground">AI routing</h2>
+          </div>
+          <p className="text-sm text-foreground">
+            Routed to: <b>{routed ? barShort(routed) : "Manual routing needed"}</b>{" "}
+            <span className={conf >= 85 ? "text-green" : conf >= 70 ? "text-orange" : "text-red"}>
+              ({conf}% confidence)
+            </span>
+          </p>
+          <p className="mb-3 text-xs text-muted-foreground">Reason: {draft.reason}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Reassign:</span>
+            <Select value={routedId ?? ""} onValueChange={(v) => setRoutedId(v)}>
+              <SelectTrigger className="h-8 w-44 text-xs">
+                <SelectValue placeholder="Select company" />
+              </SelectTrigger>
+              <SelectContent>
+                {bars.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {barShort(b)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </Card>
+      )}
+
+      <Card className="p-4">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-foreground">
+          <Split className="h-4 w-4 text-pink" />
+          <Checkbox checked={splitMode} onCheckedChange={(v) => setSplitMode(!!v)} />
+          Split across bars
+        </label>
+        {splitMode && pr && baixa && (
+          <div className="mt-4 space-y-3">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>
+                {barShort(pr)}: {prPct}% · {eur(draft.total * (prPct / 100))}
+              </span>
+              <span>
+                {barShort(baixa)}: {100 - prPct}% · {eur(draft.total * ((100 - prPct) / 100))}
+              </span>
+            </div>
+            <Slider value={[prPct]} onValueChange={([v]) => setPrPct(v)} min={0} max={100} step={5} />
+          </div>
+        )}
+      </Card>
+
+      <div className="flex gap-2">
+        <Button className="flex-1" onClick={save} disabled={saving || (!splitMode && !routedId)}>
+          {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
+          {splitMode ? "Save split invoice" : "Confirm & route"}
+        </Button>
+        <Button variant="outline" onClick={onGoUpload}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- C) History ---------- */
+function HistoryTab({
+  companies,
+  invoices,
+  allocations,
+}: {
+  companies: Company[];
+  invoices: Invoice[];
+  allocations: ReturnType<typeof useInvoiceAllocations>["data"];
+}) {
+  const [filter, setFilter] = useState<string>("all");
+  const filtered = invoices.filter((inv) => {
+    if (inv.status === "pending_routing") return false;
+    if (filter === "all") return true;
+    if (inv.is_split) return (allocations ?? []).some((a) => a.invoice_id === inv.id && a.company_id === filter);
+    return inv.company_id === filter;
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
+        <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
+          All
+        </FilterChip>
+        {companies.map((c) => (
+          <FilterChip key={c.id} active={filter === c.id} onClick={() => setFilter(c.id)} color={c.brand_color}>
+            {barShort(c)}
+          </FilterChip>
+        ))}
+      </div>
+
+      {filtered.map((inv) => {
+        const company = companyById(companies, inv.company_id);
+        const allocs = (allocations ?? []).filter((a) => a.invoice_id === inv.id);
+        return (
+          <Card key={inv.id} className="p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-foreground">{inv.vendor}</span>
+                  {inv.is_inter_company && (
+                    <Badge className="gap-1 bg-pink/15 text-pink" variant="outline">
+                      <ArrowLeftRight className="h-3 w-3" /> Inter-company
+                    </Badge>
+                  )}
+                  {inv.is_split && (
+                    <Badge className="gap-1 bg-purple/15 text-purple" variant="outline">
+                      <Split className="h-3 w-3" /> Split
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {inv.invoice_date} · {inv.delivery_address || "no address"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-semibold text-foreground">{eur(inv.total)}</p>
+                {inv.is_split ? (
+                  <div className="mt-1 flex flex-wrap justify-end gap-1">
+                    {allocs.map((a) => (
+                      <CompanyBadge key={a.id} company={companyById(companies, a.company_id)} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-1">
+                    <CompanyBadge company={company} />
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        );
+      })}
+      {filtered.length === 0 && (
+        <p className="py-8 text-center text-sm text-muted-foreground">No invoices for this filter.</p>
+      )}
+    </div>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+  color,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  color?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+        active ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:bg-card"
+      }`}
+    >
+      {color && <Dot color={color} />}
+      {children}
+    </button>
+  );
+}
+
+/* ---------- D) Pending Routing ---------- */
+function PendingTab({
+  companies,
+  bars,
+  invoices,
+  onChange,
+}: {
+  companies: Company[];
+  bars: Company[];
+  invoices: Invoice[];
+  onChange: () => Promise<unknown>;
+}) {
+  const pending = invoices.filter(
+    (i) => i.status === "pending_routing" || i.routing_confidence < 70,
+  );
+  const [picks, setPicks] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  async function assign(inv: Invoice, companyId: string) {
+    setBusy(true);
+    try {
+      const co = companyById(companies, companyId);
+      await db
+        .from("invoices")
+        .update({
+          company_id: companyId,
+          status: "confirmed",
+          routing_confidence: 100,
+          routing_reason: "Manually routed (AI learned from correction)",
+        })
+        .eq("id", inv.id);
+      await db.from("business_events").insert({
+        company_id: companyId,
+        event_type: "INVOICE_UPLOADED",
+        entity_type: "invoice",
+        entity_id: inv.id,
+        payload: { vendor: inv.vendor, corrected: true },
+      });
+      toast.success(`${inv.vendor} → ${barShort(co)} · AI will remember this`);
+      await onChange();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function bulkAssign() {
+    const entries = Object.entries(picks).filter(([, v]) => v);
+    if (entries.length === 0) return;
+    setBusy(true);
+    try {
+      for (const [id, companyId] of entries) {
+        await db
+          .from("invoices")
+          .update({
+            company_id: companyId,
+            status: "confirmed",
+            routing_confidence: 100,
+            routing_reason: "Bulk manual routing",
+          })
+          .eq("id", id);
+      }
+      toast.success(`Assigned ${entries.length} invoice(s)`);
+      setPicks({});
+      await onChange();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (pending.length === 0)
+    return (
+      <Card className="p-8 text-center">
+        <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-green" />
+        <p className="text-sm text-foreground">Nothing pending — all invoices routed.</p>
+      </Card>
+    );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          {pending.length} invoice(s) below 70% confidence
+        </p>
+        <Button size="sm" variant="outline" disabled={busy || Object.keys(picks).length === 0} onClick={bulkAssign}>
+          Bulk assign
+        </Button>
+      </div>
+      {pending.map((inv) => (
+        <Card key={inv.id} className="p-4">
+          <div className="mb-2 flex items-start justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">{inv.vendor}</p>
+              <p className="text-xs text-muted-foreground">
+                {inv.invoice_date} · {eur(inv.total)}
+              </p>
+            </div>
+            <Badge variant="outline" className="text-[10px] text-orange">
+              {inv.routing_confidence}% guess
+            </Badge>
+          </div>
+          <div className="mb-2 space-y-0.5 rounded-lg bg-background/50 p-2">
+            {inv.items.slice(0, 3).map((it, i) => (
+              <div key={i} className="flex justify-between text-xs text-muted-foreground">
+                <span>{it.qty}× {it.product}</span>
+                <span>{eur(it.total)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <AlertTriangle className="h-3.5 w-3.5 text-orange" />
+            AI guess: {inv.routing_reason}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={picks[inv.id] ?? ""}
+              onValueChange={(v) => setPicks((p) => ({ ...p, [inv.id]: v }))}
+            >
+              <SelectTrigger className="h-8 w-44 text-xs">
+                <SelectValue placeholder="Assign company" />
+              </SelectTrigger>
+              <SelectContent>
+                {bars.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {barShort(b)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              disabled={busy || !picks[inv.id]}
+              onClick={() => picks[inv.id] && assign(inv, picks[inv.id])}
+            >
+              Route
+            </Button>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+/* ---------- E) Event Log ---------- */
+function EventsTab({
+  companies,
+  events,
+}: {
+  companies: Company[];
+  events: ReturnType<typeof useBusinessEvents>["data"];
+}) {
+  const [filter, setFilter] = useState<string>("all");
+  const list = (events ?? []).filter(
+    (e) => filter === "all" || e.company_id === filter,
+  );
+  const isInter = (t: string) => t.startsWith("INTER_COMPANY") || t === "COST_ALLOCATED";
+
+  return (
+    <div className="space-y-3">
+      <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
+        <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
+          All
+        </FilterChip>
+        {companies.map((c) => (
+          <FilterChip key={c.id} active={filter === c.id} onClick={() => setFilter(c.id)} color={c.brand_color}>
+            {barShort(c)}
+          </FilterChip>
+        ))}
+      </div>
+      {list.map((e) => {
+        const co = companyById(companies, e.company_id);
+        const inter = isInter(e.event_type);
+        return (
+          <Card
+            key={e.id}
+            className={`flex items-start justify-between gap-2 p-3 ${
+              inter ? "border-pink/30 bg-pink/5" : ""
+            }`}
+          >
+            <div className="flex items-start gap-2">
+              {inter ? (
+                <ArrowLeftRight className="mt-0.5 h-4 w-4 text-pink" />
+              ) : (
+                <Building2 className="mt-0.5 h-4 w-4 text-muted-foreground" />
+              )}
+              <div>
+                <p className="text-xs font-medium text-foreground">
+                  {e.event_type.replace(/_/g, " ")}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {e.payload ? JSON.stringify(e.payload).replace(/[{}"]/g, "").replace(/,/g, " · ") : ""}
+                </p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  {new Date(e.created_at).toLocaleString()}
+                </p>
+              </div>
+            </div>
+            {co && <CompanyBadge company={co} />}
+          </Card>
+        );
+      })}
+      {list.length === 0 && (
+        <p className="py-8 text-center text-sm text-muted-foreground">No events yet.</p>
+      )}
+    </div>
   );
 }
