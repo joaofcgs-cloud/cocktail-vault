@@ -374,6 +374,45 @@ function CocktailCalc({
           <Stat label="ABV" value={`${abv.toFixed(1)}%`} tone="var(--purple)" />
         </div>
 
+        {company && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Pricing basis:</span>
+            <Badge
+              className="bg-teal/15 text-teal"
+              style={{ color: company.brand_color }}
+            >
+              {barShort(company)} · {sourcingNote(company)}
+            </Badge>
+          </div>
+        )}
+
+        {rows.length > 0 && (
+          <div className="mt-3 space-y-1 rounded-lg bg-secondary/40 p-3 text-xs">
+            <p className="font-semibold uppercase tracking-wide text-muted-foreground">
+              Company-specific per-ml cost
+            </p>
+            {rows.map((r) => {
+              const key = r.item?.name.toLowerCase() ?? "";
+              const prC = prMap.get(key);
+              const bxC = baixaMap.get(key);
+              if (prC == null && bxC == null) return null;
+              return (
+                <p key={r.key} className="flex flex-wrap gap-x-2 text-foreground">
+                  <span className="font-medium">{r.item?.name}:</span>
+                  {prC != null && (
+                    <span>At {barShort(pr)}: €{prC.toFixed(3)}/ml</span>
+                  )}
+                  {bxC != null && (
+                    <span>
+                      · At {barShort(baixa)}: €{bxC.toFixed(3)}/ml (Lab resale)
+                    </span>
+                  )}
+                </p>
+              );
+            })}
+          </div>
+        )}
+
         <div className="mt-4 space-y-1.5">
           <Label htmlFor="mp">Your menu price (€)</Label>
           <Input
