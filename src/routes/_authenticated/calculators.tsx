@@ -21,8 +21,27 @@ import {
 } from "@/components/ui/select";
 import { PourCostGauge } from "@/components/PourCostGauge";
 import { eur } from "@/lib/format";
-import { Plus, Minus, Trash2, X } from "lucide-react";
+import { Plus, Minus, Trash2, X, ArrowLeftRight, Sparkles, Send } from "lucide-react";
 import { toast } from "sonner";
+import {
+  useCompanies,
+  useCompanyInventory,
+  useGroupCocktails,
+  useGroupPreps,
+  companyCostMap,
+  sourcingNote,
+  buildSourcingCompare,
+  findBar,
+  barShort,
+  marginOf,
+  costOf,
+  AI_MEMORY,
+  LAB_RESALE_MARKUP,
+  DEFAULT_MARKUP_PERCENT,
+  prepEconomics,
+  type Company,
+} from "@/lib/group";
+import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/_authenticated/calculators")({
   head: () => ({ meta: [{ title: "Calculators — Bar Command Center" }] }),
@@ -50,8 +69,14 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
 
 function CalculatorsPage() {
   const { data: inv = [] } = useInventory();
+  const { data: companies = [] } = useCompanies();
+  const { data: companyInv = [] } = useCompanyInventory();
   const [tab, setTab] = useState("cocktail");
   const [lines, setLines] = useState<Line[]>([]);
+  const bars = companies.filter((c) => c.type === "bar");
+  const [companyId, setCompanyId] = useState<string>("");
+  const selectedCompany =
+    companies.find((c) => c.id === companyId) ?? findBar(companies, "Principe") ?? bars[0];
 
   const byId = useMemo(
     () => Object.fromEntries(inv.map((i) => [i.id, i])),
@@ -67,13 +92,36 @@ function CalculatorsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-black tracking-tight md:text-3xl">
-          Calculators
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Build drinks, batch prep, price wine, kegs and bottles.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-black tracking-tight md:text-3xl">
+            Calculators
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Company-aware costing with real inventory, preps and inter-company pricing.
+          </p>
+        </div>
+        {bars.length > 0 && (
+          <div className="min-w-[200px]">
+            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Company
+            </Label>
+            <Select value={selectedCompany?.id ?? ""} onValueChange={setCompanyId}>
+              <SelectTrigger className="mt-1 h-10">
+                <SelectValue placeholder="Select company" />
+              </SelectTrigger>
+              <SelectContent>
+                {companies
+                  .filter((c) => c.type !== "holding")
+                  .map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {barShort(c)}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -83,10 +131,20 @@ function CalculatorsPage() {
           <TabsTrigger value="wine" className="flex-1">Wine</TabsTrigger>
           <TabsTrigger value="keg" className="flex-1">Keg</TabsTrigger>
           <TabsTrigger value="bottle" className="flex-1">Bottle</TabsTrigger>
+          <TabsTrigger value="inter" className="flex-1">Inter-Company</TabsTrigger>
+          <TabsTrigger value="ai" className="flex-1">AI Chat</TabsTrigger>
         </TabsList>
 
         <TabsContent value="cocktail" className="mt-4">
-          <CocktailCalc inv={inv} byId={byId} lines={lines} setLines={setLines} />
+          <CocktailCalc
+            inv={inv}
+            byId={byId}
+            lines={lines}
+            setLines={setLines}
+            company={selectedCompany}
+            companies={companies}
+            companyInv={companyInv}
+          />
         </TabsContent>
         <TabsContent value="batch" className="mt-4">
           <BatchCalc inv={inv} byId={byId} />
@@ -106,6 +164,12 @@ function CalculatorsPage() {
               toast.success("Added to Cocktail Calculator");
             }}
           />
+        </TabsContent>
+        <TabsContent value="inter" className="mt-4">
+          <InterCompanyCalc companies={companies} />
+        </TabsContent>
+        <TabsContent value="ai" className="mt-4">
+          <AiChatCalc company={selectedCompany} companies={companies} />
         </TabsContent>
       </Tabs>
     </div>
