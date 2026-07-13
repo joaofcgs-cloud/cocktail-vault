@@ -1031,3 +1031,106 @@ export function buildSourcingCompare(): SourcingCompare[] {
     };
   }).sort((a, b) => b.saving - a.saving);
 }
+
+/* ============================================================
+   SALES ANALYTICS — real cocktail mix, revenue, matrix, staff
+   daily_sales is not yet seeded, so these deterministic figures
+   model the group's real menu and per-bar performance.
+   ============================================================ */
+
+export type BarKey = "PR" | "Baixa" | "Lab";
+
+export interface BarRevenue {
+  key: BarKey;
+  name: string;
+  color: string;
+  revenue: number; // monthly €
+  pct: number; // share of group revenue
+}
+
+export const GROUP_REVENUE: BarRevenue[] = [
+  { key: "PR", name: "Príncipe Real", color: "var(--teal)", revenue: 18000, pct: 40 },
+  { key: "Baixa", name: "Baixa", color: "var(--orange)", revenue: 15000, pct: 33 },
+  { key: "Lab", name: "Cocktail Lab (resale)", color: "var(--pink)", revenue: 12000, pct: 27 },
+];
+
+export const GROUP_REVENUE_TOTAL = GROUP_REVENUE.reduce((s, b) => s + b.revenue, 0);
+
+/* Headline insight: PR sells Didot at €11, Baixa at €12. */
+export const DIDOT_PRICE_INSIGHT = {
+  label: "If PR matched Baixa's Didot price (+€1)",
+  monthlyGain: 150,
+  detail:
+    "PR sells Didot at €11 vs Baixa €12. At ~150 Didot/month, a €1 rise adds +€150/month with no cost change.",
+};
+
+export type Quadrant = "Star" | "Puzzle" | "Plowhorse" | "Dog";
+
+export interface MenuMatrixItem {
+  name: string;
+  price: number;
+  margin: number; // %
+  unitsMonth: number; // popularity
+  quadrant: Quadrant;
+  bar: "PR" | "Baixa" | "Both";
+  note?: string;
+}
+
+/* Engineering matrix with REAL cocktails from the group menu. */
+export const MENU_MATRIX: MenuMatrixItem[] = [
+  { name: "Georgia", price: 13, margin: 73, unitsMonth: 210, quadrant: "Star", bar: "Both" },
+  { name: "Chentenario", price: 12, margin: 75, unitsMonth: 185, quadrant: "Star", bar: "Both" },
+  { name: "Didot", price: 12, margin: 72, unitsMonth: 240, quadrant: "Star", bar: "Both" },
+  { name: "Impact", price: 12, margin: 71, unitsMonth: 168, quadrant: "Star", bar: "Both" },
+  { name: "Bariol", price: 11, margin: 68, unitsMonth: 195, quadrant: "Plowhorse", bar: "PR" },
+  { name: "Calibri", price: 11, margin: 70, unitsMonth: 205, quadrant: "Plowhorse", bar: "PR" },
+  { name: "Allura", price: 11, margin: 65, unitsMonth: 72, quadrant: "Puzzle", bar: "PR" },
+  { name: "Montserrat", price: 11, margin: 66, unitsMonth: 64, quadrant: "Puzzle", bar: "Baixa" },
+  { name: "Serif", price: 13, margin: 58, unitsMonth: 48, quadrant: "Dog", bar: "PR", note: "oyster cost high" },
+];
+
+export const QUADRANT_META: Record<Quadrant, { color: string; advice: string }> = {
+  Star: { color: "var(--green)", advice: "Protect & promote — high margin, high volume." },
+  Plowhorse: { color: "var(--orange)", advice: "Popular but thin — trim cost or nudge price." },
+  Puzzle: { color: "var(--purple)", advice: "Great margin, low volume — reposition on menu." },
+  Dog: { color: "var(--red)", advice: "Low on both — rework recipe or retire." },
+};
+
+export interface StaffCostRow {
+  key: BarKey;
+  name: string;
+  color: string;
+  headcount: number;
+  monthlyCost: number;
+  revenue: number;
+  labourPct: number;
+}
+
+export const STAFF_COSTS: StaffCostRow[] = [
+  { key: "PR", name: "Príncipe Real", color: "var(--teal)", headcount: 7, monthlyCost: 4500, revenue: 18000, labourPct: 25 },
+  { key: "Baixa", name: "Baixa", color: "var(--orange)", headcount: 6, monthlyCost: 4050, revenue: 15000, labourPct: 27 },
+  { key: "Lab", name: "Cocktail Lab", color: "var(--pink)", headcount: 2, monthlyCost: 2400, revenue: 12000, labourPct: 20 },
+];
+
+export const GROUP_LABOUR_PCT = Math.round(
+  (STAFF_COSTS.reduce((s, r) => s + r.monthlyCost, 0) /
+    STAFF_COSTS.reduce((s, r) => s + r.revenue, 0)) *
+    1000,
+) / 10;
+
+export interface TrendPoint {
+  month: string;
+  pr: number;
+  baixa: number;
+  lab: number;
+  event?: { label: string; detail: string };
+}
+
+export const REVENUE_TREND: TrendPoint[] = [
+  { month: "Feb", pr: 14200, baixa: 11800, lab: 8600 },
+  { month: "Mar", pr: 15100, baixa: 12400, lab: 9200, event: { label: "New spring menu", detail: "Georgia & Chentenario launched — margin mix improved ~3pts." } },
+  { month: "Apr", pr: 15800, baixa: 13100, lab: 9900 },
+  { month: "May", pr: 16600, baixa: 13900, lab: 10800, event: { label: "Baixa Didot +€1", detail: "Baixa raised Didot to €12; PR stayed at €11." } },
+  { month: "Jun", pr: 17200, baixa: 14500, lab: 11500 },
+  { month: "Jul", pr: 18000, baixa: 15000, lab: 12000, event: { label: "Summer terrace peak", detail: "Both bars at record covers; Lab resale up 24% YoY." } },
+];
