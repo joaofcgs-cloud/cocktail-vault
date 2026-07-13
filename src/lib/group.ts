@@ -1155,3 +1155,54 @@ export const STAFF_MOVEMENTS: StaffMovement[] = [
   { id: "m3", date: "2026-07-10", staff: "Francisco Dias", from: "Lab", to: "PR", reason: "On-site batch training for bar team", hours: 4 },
   { id: "m4", date: "2026-07-12", staff: "Sofia Martins", from: "PR", to: "Baixa", reason: "Holiday cover", hours: 8 },
 ];
+
+/* ============================================================
+   SERVICE COSTS — holding cost allocation across bars
+   ============================================================ */
+export type AllocationMethod = "equal" | "revenue" | "custom";
+
+export interface AllocSplit {
+  company_id: string;
+  name: string;
+  percent: number;
+  amount: number;
+}
+
+export function holdingCompany(companies: Company[]): Company | undefined {
+  return companies.find((c) => c.type === "holding");
+}
+
+export function sumCosts(rows: ServiceCostRow[], companyId?: string): number {
+  return rows
+    .filter((r) => (companyId ? r.company_id === companyId : true))
+    .reduce((s, r) => s + Number(r.amount), 0);
+}
+
+/* Split a holding total across the bars by the chosen method.
+   revenueMap: company_id -> monthly revenue (for revenue-based). */
+export function computeAllocation(
+  total: number,
+  bars: Company[],
+  method: AllocationMethod,
+  opts?: { revenueMap?: Record<string, number>; customPct?: Record<string, number> },
+): AllocSplit[] {
+  if (bars.length === 0) return [];
+  let percents: number[];
+  if (method === "equal") {
+    percents = bars.map(() => 100 / bars.length);
+  } else if (method === "revenue") {
+    const revs = bars.map((b) => opts?.revenueMap?.[b.id] ?? 0);
+    const totalRev = revs.reduce((s, r) => s + r, 0) || 1;
+    percents = revs.map((r) => (r / totalRev) * 100);
+  } else {
+    percents = bars.map((b) => opts?.customPct?.[b.id] ?? 100 / bars.length);
+    const sum = percents.reduce((s, p) => s + p, 0) || 1;
+    percents = percents.map((p) => (p / sum) * 100);
+  }
+  return bars.map((b, i) => ({
+    company_id: b.id,
+    name: barShort(b),
+    percent: Math.round(percents[i] * 10) / 10,
+    amount: Math.round(total * (percents[i] / 100) * 100) / 100,
+  }));
+}

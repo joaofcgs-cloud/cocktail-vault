@@ -19,6 +19,7 @@ import { Route as AuthenticatedVarianceRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedStockRouteImport } from './routes/_authenticated/stock'
 import { Route as AuthenticatedStaffRouteImport } from './routes/_authenticated/staff'
+import { Route as AuthenticatedServiceCostsRouteImport } from './routes/_authenticated/service-costs'
 import { Route as AuthenticatedSalesRouteImport } from './routes/_authenticated/sales'
 import { Route as AuthenticatedRecipesRouteImport } from './routes/_authenticated/recipes'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
@@ -80,6 +81,12 @@ const AuthenticatedStaffRoute = AuthenticatedStaffRouteImport.update({
   path: '/staff',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedServiceCostsRoute =
+  AuthenticatedServiceCostsRouteImport.update({
+    id: '/service-costs',
+    path: '/service-costs',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSalesRoute = AuthenticatedSalesRouteImport.update({
   id: '/sales',
   path: '/sales',
@@ -155,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof AuthenticatedProfileRoute
   '/recipes': typeof AuthenticatedRecipesRoute
   '/sales': typeof AuthenticatedSalesRoute
+  '/service-costs': typeof AuthenticatedServiceCostsRoute
   '/staff': typeof AuthenticatedStaffRoute
   '/stock': typeof AuthenticatedStockRoute
   '/users': typeof AuthenticatedUsersRoute
@@ -176,6 +184,7 @@ export interface FileRoutesByTo {
   '/profile': typeof AuthenticatedProfileRoute
   '/recipes': typeof AuthenticatedRecipesRoute
   '/sales': typeof AuthenticatedSalesRoute
+  '/service-costs': typeof AuthenticatedServiceCostsRoute
   '/staff': typeof AuthenticatedStaffRoute
   '/stock': typeof AuthenticatedStockRoute
   '/users': typeof AuthenticatedUsersRoute
@@ -200,6 +209,7 @@ export interface FileRoutesById {
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/recipes': typeof AuthenticatedRecipesRoute
   '/_authenticated/sales': typeof AuthenticatedSalesRoute
+  '/_authenticated/service-costs': typeof AuthenticatedServiceCostsRoute
   '/_authenticated/staff': typeof AuthenticatedStaffRoute
   '/_authenticated/stock': typeof AuthenticatedStockRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
@@ -225,6 +235,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/recipes'
     | '/sales'
+    | '/service-costs'
     | '/staff'
     | '/stock'
     | '/users'
@@ -246,6 +257,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/recipes'
     | '/sales'
+    | '/service-costs'
     | '/staff'
     | '/stock'
     | '/users'
@@ -269,6 +281,7 @@ export interface FileRouteTypes {
     | '/_authenticated/profile'
     | '/_authenticated/recipes'
     | '/_authenticated/sales'
+    | '/_authenticated/service-costs'
     | '/_authenticated/staff'
     | '/_authenticated/stock'
     | '/_authenticated/users'
@@ -354,6 +367,13 @@ declare module '@tanstack/react-router' {
       path: '/staff'
       fullPath: '/staff'
       preLoaderRoute: typeof AuthenticatedStaffRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/service-costs': {
+      id: '/_authenticated/service-costs'
+      path: '/service-costs'
+      fullPath: '/service-costs'
+      preLoaderRoute: typeof AuthenticatedServiceCostsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/sales': {
@@ -448,6 +468,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedRecipesRoute: typeof AuthenticatedRecipesRoute
   AuthenticatedSalesRoute: typeof AuthenticatedSalesRoute
+  AuthenticatedServiceCostsRoute: typeof AuthenticatedServiceCostsRoute
   AuthenticatedStaffRoute: typeof AuthenticatedStaffRoute
   AuthenticatedStockRoute: typeof AuthenticatedStockRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
@@ -467,6 +488,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedRecipesRoute: AuthenticatedRecipesRoute,
   AuthenticatedSalesRoute: AuthenticatedSalesRoute,
+  AuthenticatedServiceCostsRoute: AuthenticatedServiceCostsRoute,
   AuthenticatedStaffRoute: AuthenticatedStaffRoute,
   AuthenticatedStockRoute: AuthenticatedStockRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
