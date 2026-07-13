@@ -878,3 +878,202 @@ function BottleBreakdown({
     </div>
   );
 }
+
+/* ---------------- F) Inter-Company sourcing ---------------- */
+function InterCompanyCalc({ companies }: { companies: Company[] }) {
+  const baixa = findBar(companies, "Baixa");
+  const rows = useMemo(() => buildSourcingCompare(), []);
+  const totalSaving = rows.reduce((s, r) => s + Math.max(0, r.saving), 0);
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-border bg-card p-4">
+        <div className="flex items-center gap-2">
+          <ArrowLeftRight className="h-4 w-4 text-teal" />
+          <h2 className="text-sm font-bold uppercase tracking-wide">
+            What if {barShort(baixa)} bought through the Lab?
+          </h2>
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Compare buying direct from suppliers vs consolidating through the Lab
+          (Lab bulk price + {LAB_RESALE_MARKUP}% resale markup).
+        </p>
+      </Card>
+
+      <Card className="overflow-x-auto p-0">
+        <table className="w-full min-w-[560px] text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-xs text-muted-foreground">
+              <th className="p-3 font-medium">Ingredient</th>
+              <th className="p-3 font-medium">Direct</th>
+              <th className="p-3 font-medium">Lab bulk</th>
+              <th className="p-3 font-medium">Lab resale</th>
+              <th className="p-3 text-right font-medium">Saving</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.ingredient} className="border-b border-border/60 last:border-0">
+                <td className="p-3">
+                  <div className="font-medium">{r.ingredient}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {r.directSupplier} · /{r.unit}
+                  </div>
+                </td>
+                <td className="p-3">{eur(r.directCost)}</td>
+                <td className="p-3 text-muted-foreground">{eur(r.labCost)}</td>
+                <td className="p-3 font-semibold">{eur(r.resaleCost)}</td>
+                <td className="p-3 text-right">
+                  <Badge
+                    className={
+                      r.saving > 0 ? "bg-green/15 text-green" : "bg-red/15 text-red"
+                    }
+                  >
+                    {r.saving > 0 ? "−" : "+"}
+                    {eur(Math.abs(r.saving))}/{r.unit} ({r.savingPct}%)
+                  </Badge>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+
+      <Card className="border-green/30 bg-green/5 p-4 text-sm">
+        <p className="text-foreground">
+          Consolidating these ingredients through the Lab saves {barShort(baixa)}{" "}
+          <span className="font-semibold text-green">
+            ~{eur(totalSaving)} per purchase unit
+          </span>{" "}
+          — plus fewer delivery fees. Biggest win:{" "}
+          <span className="font-semibold">{rows[0]?.ingredient}</span> at{" "}
+          {rows[0]?.savingPct}% cheaper.
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+/* ---------------- G) AI Chat (company-aware, reads ai_memory) ---------------- */
+function AiChatCalc({
+  company,
+  companies,
+}: {
+  company?: Company;
+  companies: Company[];
+}) {
+  const { data: cocktails = [] } = useGroupCocktails();
+  const pr = findBar(companies, "Principe");
+  const baixa = findBar(companies, "Baixa");
+
+  const pourCostFor = (c?: Company) => {
+    if (!c) return 0;
+    const list = cocktails.filter((x) => x.company_id === c.id);
+    if (!list.length) return 0;
+    const avg =
+      list.reduce((s, x) => s + costOf(x) / (x.price || 1), 0) / list.length;
+    return avg * 100;
+  };
+
+  function answer(q: string): string {
+    const ql = q.toLowerCase();
+    if (ql.includes("pour cost") || ql.includes("pour")) {
+      return `At ${barShort(pr)}, your average pour cost is ${pourCostFor(pr).toFixed(0)}%. At ${barShort(baixa)}, it's ${pourCostFor(baixa).toFixed(0)}%. ${barShort(baixa)} runs higher — mostly citrus + tonic bought direct instead of through the Lab.`;
+    }
+    if (ql.includes("didot") || ql.includes("optimi") || ql.includes("price")) {
+      const prC = cocktails.find((c) => c.company_id === pr?.id && c.name === "Didot");
+      const cur = prC?.price ?? 11;
+      const next = cur + 1;
+      return `Optimize Didot pricing: ${barShort(pr)} €${cur} → €${next}. Estimated ~180 covers/month → +€${(180).toLocaleString()}/month with negligible demand impact (margin ${marginOf({ ...(prC as any), price: next }).toFixed(0)}%). Owner prefers €0.50 increments — €${next.toFixed(2)} is clean.`;
+    }
+    if (ql.includes("pura") || ql.includes("lab") || ql.includes("source")) {
+      return `PURA delivers to ${barShort(baixa)} on Wednesdays and ${barShort(pr)} on Mondays. Routing lime, tonic and syrup through the Lab cuts ${barShort(baixa)}'s food cost by ~€0.27/drink after the ${LAB_RESALE_MARKUP}% resale markup.`;
+    }
+    return `Here's what I know for ${barShort(company)}: pour cost ~${pourCostFor(company).toFixed(0)}%. Ask me about pour cost, Didot pricing, or Lab sourcing. I also apply your saved rules (€0.50 price increments, PURA delivery days).`;
+  }
+
+  const presets = [
+    "What's my pour cost per bar?",
+    "Optimize Didot pricing",
+    "Should Baixa source through the Lab?",
+  ];
+  const [msgs, setMsgs] = useState<{ role: "user" | "ai"; text: string }[]>([
+    {
+      role: "ai",
+      text: `Hi — I'm your group controller. I read your saved rules and live cost data. Currently focused on ${barShort(company)}. Ask me anything below.`,
+    },
+  ]);
+  const [input, setInput] = useState("");
+
+  function send(text: string) {
+    const t = text.trim();
+    if (!t) return;
+    setMsgs((m) => [...m, { role: "user", text: t }, { role: "ai", text: answer(t) }]);
+    setInput("");
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <Card className="border-border bg-card p-4 lg:col-span-2">
+        <div className="mb-3 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-purple" />
+          <h2 className="text-sm font-bold uppercase tracking-wide">
+            AI Controller · {barShort(company)}
+          </h2>
+        </div>
+        <div className="max-h-[420px] space-y-3 overflow-y-auto">
+          {msgs.map((m, i) => (
+            <div
+              key={i}
+              className={`rounded-lg p-3 text-sm ${
+                m.role === "user"
+                  ? "ml-8 bg-teal/15 text-foreground"
+                  : "mr-8 bg-secondary/60 text-foreground"
+              }`}
+            >
+              {m.text}
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && send(input)}
+            placeholder="Ask about pour cost, pricing, sourcing…"
+            className="h-11"
+          />
+          <Button className="h-11" onClick={() => send(input)}>
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="border-border bg-card p-4">
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Quick questions
+        </p>
+        <div className="space-y-2">
+          {presets.map((p) => (
+            <Button
+              key={p}
+              variant="outline"
+              className="h-auto w-full justify-start whitespace-normal py-2 text-left text-xs"
+              onClick={() => send(p)}
+            >
+              {p}
+            </Button>
+          ))}
+        </div>
+        <p className="mb-2 mt-4 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Saved rules (ai_memory)
+        </p>
+        <ul className="space-y-1.5 text-xs text-muted-foreground">
+          {AI_MEMORY.map((r) => (
+            <li key={r}>• {r}</li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}
