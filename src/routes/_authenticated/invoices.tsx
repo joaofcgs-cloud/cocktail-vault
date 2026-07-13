@@ -418,6 +418,7 @@ function ReviewTab({
   const conf = routedId === draft.routedCompanyId ? draft.confidence : 100;
 
   async function save() {
+    if (!draft) return;
     setSaving(true);
     try {
       const status = splitMode || routedId ? "confirmed" : "pending_routing";
