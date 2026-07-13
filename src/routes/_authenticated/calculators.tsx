@@ -182,11 +182,17 @@ function CocktailCalc({
   byId,
   lines,
   setLines,
+  company,
+  companies,
+  companyInv,
 }: {
   inv: InventoryItem[];
   byId: Record<string, InventoryItem>;
   lines: Line[];
   setLines: React.Dispatch<React.SetStateAction<Line[]>>;
+  company?: Company;
+  companies: Company[];
+  companyInv: import("@/lib/group").CompanyInventoryRow[];
 }) {
   const qc = useQueryClient();
   const { isOwner } = useAuth();
@@ -194,9 +200,31 @@ function CocktailCalc({
   const [name, setName] = useState("");
   const [menuPrice, setMenuPrice] = useState("");
 
+  const pr = findBar(companies, "Principe");
+  const baixa = findBar(companies, "Baixa");
+  const costMap = useMemo(
+    () => (company ? companyCostMap(companyInv, company.id) : new Map<string, number>()),
+    [companyInv, company],
+  );
+  const prMap = useMemo(
+    () => (pr ? companyCostMap(companyInv, pr.id) : new Map<string, number>()),
+    [companyInv, pr],
+  );
+  const baixaMap = useMemo(
+    () => (baixa ? companyCostMap(companyInv, baixa.id) : new Map<string, number>()),
+    [companyInv, baixa],
+  );
+
+  // Company-aware per-ml cost: prefer company_inventory price, fall back to bar inventory.
+  function perMl(item?: InventoryItem): number {
+    if (!item) return 0;
+    const cm = costMap.get(item.name.toLowerCase());
+    return cm != null ? cm : item.cost_per_ml;
+  }
+
   const rows = lines.map((l) => {
     const item = byId[l.inventory_id];
-    const cost = item ? item.cost_per_ml * l.amount_ml : 0;
+    const cost = item ? perMl(item) * l.amount_ml : 0;
     const alcoholMl = item ? (item.abv / 100) * l.amount_ml : 0;
     return { ...l, item, cost, alcoholMl };
   });
@@ -205,7 +233,8 @@ function CocktailCalc({
   const totalVol = rows.reduce((s, r) => s + r.amount_ml, 0);
   const totalAlcohol = rows.reduce((s, r) => s + r.alcoholMl, 0);
   const abv = totalVol > 0 ? (totalAlcohol / totalVol) * 100 : 0;
-  const suggested = totalCost / 0.2; // 20% pour cost target
+  const suggestedRaw = totalCost / 0.2; // 20% pour cost target
+  const suggested = Math.round(suggestedRaw * 2) / 2; // ai_memory: €0.50 increments
   const price = parseFloat(menuPrice) || 0;
   const pourCost = price > 0 ? (totalCost / price) * 100 : 0;
   const profit = price > 0 ? price - totalCost : 0;
