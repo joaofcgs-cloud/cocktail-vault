@@ -248,6 +248,105 @@ export type Database = {
           },
         ]
       }
+      company_relationships: {
+        Row: {
+          created_at: string
+          from_company_id: string
+          id: string
+          markup_percent: number
+          to_company_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          from_company_id: string
+          id?: string
+          markup_percent?: number
+          to_company_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          from_company_id?: string
+          id?: string
+          markup_percent?: number
+          to_company_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_relationships_from_company_id_fkey"
+            columns: ["from_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_relationships_to_company_id_fkey"
+            columns: ["to_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cost_allocations: {
+        Row: {
+          applied: boolean
+          created_at: string
+          created_by: string | null
+          from_company_id: string
+          id: string
+          label: string
+          period_month: number | null
+          period_year: number | null
+          service_cost_id: string | null
+          splits: Json
+          total_amount: number
+        }
+        Insert: {
+          applied?: boolean
+          created_at?: string
+          created_by?: string | null
+          from_company_id: string
+          id?: string
+          label: string
+          period_month?: number | null
+          period_year?: number | null
+          service_cost_id?: string | null
+          splits?: Json
+          total_amount?: number
+        }
+        Update: {
+          applied?: boolean
+          created_at?: string
+          created_by?: string | null
+          from_company_id?: string
+          id?: string
+          label?: string
+          period_month?: number | null
+          period_year?: number | null
+          service_cost_id?: string | null
+          splits?: Json
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_allocations_from_company_id_fkey"
+            columns: ["from_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cost_allocations_service_cost_id_fkey"
+            columns: ["service_cost_id"]
+            isOneToOne: false
+            referencedRelation: "service_costs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cost_targets: {
         Row: {
           company_id: string | null
@@ -327,6 +426,136 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inter_company_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          from_company_id: string
+          id: string
+          note: string | null
+          payment_date: string
+          to_company_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          from_company_id: string
+          id?: string
+          note?: string | null
+          payment_date?: string
+          to_company_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          from_company_id?: string
+          id?: string
+          note?: string | null
+          payment_date?: string
+          to_company_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inter_company_payments_from_company_id_fkey"
+            columns: ["from_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_company_payments_to_company_id_fkey"
+            columns: ["to_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inter_company_transfers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          delivered_at: string | null
+          delivery_date: string | null
+          from_company_id: string
+          id: string
+          item_name: string
+          kind: string
+          markup_percent: number
+          prep_recipe_id: string | null
+          product_id: string | null
+          production_cost: number
+          status: string
+          transfer_price: number
+          updated_at: string
+          yield_amount: number
+          yield_unit: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string | null
+          delivery_date?: string | null
+          from_company_id: string
+          id?: string
+          item_name: string
+          kind?: string
+          markup_percent?: number
+          prep_recipe_id?: string | null
+          product_id?: string | null
+          production_cost?: number
+          status?: string
+          transfer_price?: number
+          updated_at?: string
+          yield_amount?: number
+          yield_unit?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string | null
+          delivery_date?: string | null
+          from_company_id?: string
+          id?: string
+          item_name?: string
+          kind?: string
+          markup_percent?: number
+          prep_recipe_id?: string | null
+          product_id?: string | null
+          production_cost?: number
+          status?: string
+          transfer_price?: number
+          updated_at?: string
+          yield_amount?: number
+          yield_unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inter_company_transfers_from_company_id_fkey"
+            columns: ["from_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_company_transfers_prep_recipe_id_fkey"
+            columns: ["prep_recipe_id"]
+            isOneToOne: false
+            referencedRelation: "prep_recipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_company_transfers_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -897,6 +1126,48 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transfer_allocations: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          quantity: number
+          to_company_id: string
+          transfer_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          id?: string
+          quantity?: number
+          to_company_id: string
+          transfer_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          quantity?: number
+          to_company_id?: string
+          transfer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transfer_allocations_to_company_id_fkey"
+            columns: ["to_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transfer_allocations_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "inter_company_transfers"
             referencedColumns: ["id"]
           },
         ]
