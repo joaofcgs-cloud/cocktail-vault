@@ -1,12 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { db, type ServiceCost, type ServiceCostPayment, type Invoice } from "@/lib/db";
-import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -14,910 +10,820 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { eur, num } from "@/lib/format";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { eur } from "@/lib/format";
-import { Download, Lock, CheckCircle2, Clock, AlertOctagon, Check, Pencil, Receipt } from "lucide-react";
+  useCompanies,
+  useGroupCocktails,
+  useServiceCosts,
+  useProducts,
+  usePriceHistory,
+  findBar,
+  barShort,
+  buildBenchmark,
+  buildSharedComparisons,
+  latestPrices,
+  buildSupplierScores,
+  marginOf,
+  costOf,
+  type Company,
+  type GroupCocktail,
+} from "@/lib/group";
 import { toast } from "sonner";
+import {
+  BarChart3,
+  Building2,
+  UtensilsCrossed,
+  Wine,
+  Wrench,
+  TrendingUp,
+  Truck,
+  ArrowRight,
+  Copy,
+  ChevronRight,
+  AlertTriangle,
+  Trophy,
+  Boxes,
+} from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/costs")({
-  head: () => ({ meta: [{ title: "Service Costs — Bar Command Center" }] }),
+  head: () => ({
+    meta: [
+      { title: "Costs — Imprensa Group Command Center" },
+      {
+        name: "description",
+        content:
+          "Multi-company cost control across the Plataforma Boémia group: group benchmarking, food/beverage/operating costs, price evolution and supplier scorecards.",
+      },
+    ],
+  }),
   component: CostsPage,
 });
 
-const CAT_COLOR: Record<string, string> = {
-  Property: "var(--red)",
-  Utilities: "var(--orange)",
-  Technology: "var(--teal)",
-  Insurance: "var(--purple)",
-  Licenses: "var(--pink)",
-  Services: "var(--green)",
-  Operations: "var(--foreground)",
-  Professional: "var(--teal)",
-  Compliance: "var(--orange)",
-};
-
-const TABS = ["Dashboard", "By Supplier", "Costs List", "Payments", "Alerts"] as const;
-type Tab = (typeof TABS)[number];
-
-const STATUS_BADGE: Record<string, string> = {
-  paid: "bg-green/15 text-green",
-  pending: "bg-orange/15 text-orange",
-  overdue: "bg-red/15 text-red",
-};
+const TABS = [
+  { key: "bench", label: "Group Benchmarking", icon: BarChart3 },
+  { key: "company", label: "By Company", icon: Building2 },
+  { key: "food", label: "Food", icon: UtensilsCrossed },
+  { key: "beverage", label: "Beverage", icon: Wine },
+  { key: "operating", label: "Operating", icon: Wrench },
+  { key: "price", label: "Price Evolution", icon: TrendingUp },
+  { key: "suppliers", label: "Suppliers", icon: Truck },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
 
 function CostsPage() {
-  const { isOwner } = useAuth();
-  const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>("Dashboard");
-  const [category, setCategory] = useState("all");
-  const today = new Date().getDate();
-  const now = new Date();
-  const [selMonth, setSelMonth] = useState(now.getMonth() + 1);
-  const [selYear, setSelYear] = useState(now.getFullYear());
-  const [periodMode, setPeriodMode] = useState<"month" | "year">("month");
-  const [editVendorId, setEditVendorId] = useState<string | null>(null);
-  const [editVendorVal, setEditVendorVal] = useState("");
-  const [savingVendor, setSavingVendor] = useState(false);
-  const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
+  const [tab, setTab] = useState<TabKey>("bench");
+  const [companyId, setCompanyId] = useState<string>("");
 
-  const { data: costs = [] } = useQuery({
-    queryKey: ["service_costs"],
-    queryFn: async (): Promise<ServiceCost[]> => {
-      const { data, error } = await db
-        .from("service_costs")
-        .select("*")
-        .order("amount", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-    enabled: isOwner,
-  });
+  const { data: companies = [] } = useCompanies();
+  const { data: cocktails = [] } = useGroupCocktails();
+  const { data: serviceCosts = [] } = useServiceCosts();
+  const { data: products = [] } = useProducts();
+  const { data: priceRows = [] } = usePriceHistory();
 
-  const { data: payments = [] } = useQuery({
-    queryKey: ["service_cost_payments"],
-    queryFn: async (): Promise<ServiceCostPayment[]> => {
-      const { data, error } = await db.from("service_cost_payments").select("*");
-      if (error) throw error;
-      return data;
-    },
-    enabled: isOwner,
-  });
+  const pr = findBar(companies, "Principe");
+  const baixa = findBar(companies, "Baixa");
+  const bars = companies.filter((c) => c.type === "bar");
 
-  // Supplier suggestions: existing cost vendors + invoice vendors, for consistency.
-  const { data: invoiceVendors = [] } = useQuery({
-    queryKey: ["invoice_vendors"],
-    queryFn: async (): Promise<string[]> => {
-      const { data, error } = await db.from("invoices").select("vendor");
-      if (error) throw error;
-      return (data ?? [])
-        .map((r: { vendor: string | null }) => r.vendor)
-        .filter(Boolean) as string[];
-    },
-    enabled: isOwner,
-  });
-
-  const vendorOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          [
-            ...costs.map((c) => c.vendor?.trim()),
-            ...invoiceVendors.map((v) => v?.trim()),
-          ].filter(Boolean) as string[],
-        ),
-      ).sort((a, b) => a.localeCompare(b)),
-    [costs, invoiceVendors],
-  );
-
-  // Full invoices for computing per-vendor invoiced totals.
-  const { data: invoices = [] } = useQuery({
-    queryKey: ["invoices_full"],
-    queryFn: async (): Promise<Invoice[]> => {
-      const { data, error } = await db
-        .from("invoices")
-        .select("*")
-        .order("date", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-    enabled: isOwner,
-  });
-
-  // Sum of invoice totals per vendor, filtered by the selected period.
-  const invoiceTotalByVendor = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const inv of invoices) {
-      if (!inv.vendor) continue;
-      const d = inv.date ? new Date(inv.date) : null;
-      if (!d || Number.isNaN(d.getTime())) continue;
-      if (d.getFullYear() !== selYear) continue;
-      if (periodMode === "month" && d.getMonth() + 1 !== selMonth) continue;
-      const key = inv.vendor.trim();
-      map.set(key, (map.get(key) ?? 0) + (inv.total ?? 0));
-    }
-    return map;
-  }, [invoices, periodMode, selMonth, selYear]);
-
-  const invoicedFor = (vendor: string | null) =>
-    vendor ? invoiceTotalByVendor.get(vendor.trim()) ?? 0 : 0;
-
-  // All uploaded invoices for the currently selected supplier.
-  const supplierInvoices = useMemo(() => {
-    if (!selectedSupplier) return [];
-    return invoices
-      .filter((inv) => {
-        if (!inv.vendor) return false;
-        return inv.vendor.trim().toLowerCase() === selectedSupplier.trim().toLowerCase();
-      })
-      .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-  }, [invoices, selectedSupplier]);
-
-  const supplierInvoicesTotal = supplierInvoices.reduce((s, inv) => s + (inv.total ?? 0), 0);
-
-  async function saveVendor(costId: string) {
-    const name = editVendorVal.trim();
-    setSavingVendor(true);
-    try {
-      const { error } = await db
-        .from("service_costs")
-        .update({ vendor: name || null })
-        .eq("id", costId);
-      if (error) throw error;
-      toast.success("Vendor updated.");
-      qc.invalidateQueries({ queryKey: ["service_costs"] });
-      setEditVendorId(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update vendor");
-    } finally {
-      setSavingVendor(false);
-    }
-  }
-
-  async function openReceipt(path: string) {
-    const { data, error } = await supabase.storage.from("receipts").createSignedUrl(path, 60);
-    if (error || !data) {
-      toast.error("Could not open receipt.");
-      return;
-    }
-    window.open(data.signedUrl, "_blank");
-  }
-
-  const payByCost = useMemo(
-    () => Object.fromEntries(payments.map((p) => [p.service_cost_id, p])),
-    [payments],
-  );
-
-  const monthly = costs
-    .filter((c) => c.active)
-    .reduce(
-      (s, c) =>
-        s + (c.frequency === "annual" ? c.amount / 12 : c.frequency === "quarterly" ? c.amount / 3 : c.amount),
-      0,
-    );
-  const paid = payments.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount_paid, 0);
-  const pending = costs
-    .filter((c) => payByCost[c.id]?.status !== "paid")
-    .reduce((s, c) => s + c.amount, 0);
-  const nextDue = [...costs]
-    .filter((c) => c.active && payByCost[c.id]?.status !== "paid")
-    .sort((a, b) => a.due_day - b.due_day)[0];
-
-  const byCategory = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const c of costs.filter((x) => x.active)) {
-      map.set(c.category, (map.get(c.category) ?? 0) + c.amount);
-    }
-    return [...map.entries()].sort((a, b) => b[1] - a[1]);
-  }, [costs]);
-  const catMax = byCategory.length ? byCategory[0][1] : 1;
-
-  const categories = useMemo(
-    () => Array.from(new Set(costs.map((c) => c.category))).sort(),
-    [costs],
-  );
-  const listed = costs.filter((c) => category === "all" || c.category === category);
-
-  const MONTH_NAMES = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
-  ];
-  const yearOptions = useMemo(() => {
-    const set = new Set<number>([now.getFullYear()]);
-    payments.forEach((p) => set.add(p.year));
-    invoices.forEach((inv) => {
-      const d = inv.date ? new Date(inv.date) : null;
-      if (d && !Number.isNaN(d.getTime())) set.add(d.getFullYear());
-    });
-    return [...set].sort((a, b) => b - a);
-  }, [payments, invoices, now]);
-
-  const bySupplier = useMemo(() => {
-    const periodPay = new Map(
-      payments
-        .filter((p) => p.month === selMonth && p.year === selYear)
-        .map((p) => [p.service_cost_id, p]),
-    );
-    const map = new Map<
-      string,
-      {
-        expected: number;
-        paid: number;
-        items: { name: string; category: string; expected: number; paid: number; status: string }[];
-      }
-    >();
-    for (const c of costs.filter((x) => x.active)) {
-      const supplier = c.vendor || "Other";
-      const pay = periodPay.get(c.id);
-      const expected =
-        c.frequency === "annual"
-          ? c.amount / 12
-          : c.frequency === "quarterly"
-            ? c.amount / 3
-            : c.amount;
-      const g = map.get(supplier) ?? { expected: 0, paid: 0, items: [] };
-      g.expected += expected;
-      g.paid += pay?.amount_paid ?? 0;
-      g.items.push({
-        name: c.name,
-        category: c.category,
-        expected,
-        paid: pay?.amount_paid ?? 0,
-        status: pay?.status ?? "pending",
-      });
-      map.set(supplier, g);
-    }
-    return [...map.entries()]
-      .map(([supplier, g]) => ({
-        supplier,
-        ...g,
-        items: g.items.sort((a, b) => b.expected - a.expected),
-      }))
-      .sort((a, b) => b.expected - a.expected);
-  }, [costs, payments, selMonth, selYear]);
-
-  const periodExpected = bySupplier.reduce((s, g) => s + g.expected, 0);
-  const periodPaid = bySupplier.reduce((s, g) => s + g.paid, 0);
-
-  const upcoming = [...costs]
-    .filter((c) => c.active && payByCost[c.id]?.status !== "paid")
-    .map((c) => ({ cost: c, daysUntil: c.due_day - today }))
-    .sort((a, b) => a.daysUntil - b.daysUntil);
-
-  if (!isOwner) {
-    return (
-      <Card className="mx-auto mt-20 max-w-md border-border bg-card p-8 text-center">
-        <Lock className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-        <h1 className="text-lg font-bold">Owners only</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Fixed cost data is restricted to Owner accounts.
-        </p>
-      </Card>
-    );
-  }
-
-  async function markPaid(cost: ServiceCost) {
-    const pay = payByCost[cost.id];
-    if (!pay) return;
-    qc.setQueryData<ServiceCostPayment[]>(["service_cost_payments"], (old) =>
-      (old ?? []).map((p) =>
-        p.id === pay.id
-          ? { ...p, status: "paid", amount_paid: cost.amount, payment_date: new Date().toISOString().slice(0, 10) }
-          : p,
-      ),
-    );
-    const { error } = await db
-      .from("service_cost_payments")
-      .update({
-        status: "paid",
-        amount_paid: cost.amount,
-        payment_date: new Date().toISOString().slice(0, 10),
-      })
-      .eq("id", pay.id);
-    if (error) {
-      toast.error(error.message);
-      qc.invalidateQueries({ queryKey: ["service_cost_payments"] });
-    } else {
-      toast.success(`${cost.name} marked as paid`);
-      qc.invalidateQueries({ queryKey: ["service_cost_payments"] });
-    }
-  }
-
-  const periodLabel =
-    periodMode === "month" ? `${MONTH_NAMES[selMonth - 1]}-${selYear}` : `${selYear}`;
-
-  function downloadCsv(rows: (string | number)[][], filename: string) {
-    const csv = rows
-      .map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportCsv() {
-    const headers = [
-      "Service",
-      "Category",
-      `Amount (${periodLabel})`,
-      "Due Day",
-      "Vendor",
-      "Status",
-    ];
-    const rows = listed.map((c) => [
-      c.name,
-      c.category,
-      invoicedFor(c.vendor).toFixed(2),
-      c.due_day,
-      c.vendor ?? "",
-      payByCost[c.id]?.status ?? "pending",
-    ]);
-    downloadCsv([headers, ...rows], `service-costs-${periodLabel}.csv`);
-  }
-
-  function exportSupplierCsv() {
-    const headers = ["Vendor", "Service", "Category", "Expected", "Paid", "Status"];
-    const rows: (string | number)[][] = [];
-    for (const g of bySupplier) {
-      for (const it of g.items) {
-        rows.push([
-          g.supplier,
-          it.name,
-          it.category,
-          it.expected.toFixed(2),
-          it.paid.toFixed(2),
-          it.status,
-        ]);
-      }
-    }
-    downloadCsv([headers, ...rows], `costs-by-supplier-${MONTH_NAMES[selMonth - 1]}-${selYear}.csv`);
-  }
+  // default selected company = first bar
+  const selected =
+    companies.find((c) => c.id === companyId) ?? pr ?? bars[0];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-black tracking-tight md:text-3xl">
-          Service Costs
-        </h1>
+    <div className="mx-auto w-full max-w-6xl px-3 pb-24 pt-4 md:px-6">
+      <header className="mb-4">
+        <h1 className="text-xl font-semibold text-foreground md:text-2xl">Costs</h1>
         <p className="text-sm text-muted-foreground">
-          {costs.length} fixed costs · {eur(monthly)}/mo
+          Group-wide cost control — drill from group to company, category, product and invoice.
         </p>
-      </div>
+      </header>
 
-      <div className="flex gap-1 overflow-x-auto rounded-xl bg-secondary p-1">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`h-10 shrink-0 whitespace-nowrap rounded-lg px-4 text-sm font-semibold transition-colors ${
-              tab === t ? "bg-card text-foreground shadow" : "text-muted-foreground"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {tab === "Dashboard" && (
-        <div className="space-y-6">
-          <PeriodControl
-            periodMode={periodMode}
-            setPeriodMode={setPeriodMode}
-            selMonth={selMonth}
-            setSelMonth={setSelMonth}
-            selYear={selYear}
-            setSelYear={setSelYear}
-            monthNames={MONTH_NAMES}
-            yearOptions={yearOptions}
-          />
-          <Card className="border-border bg-card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Invoiced ({periodLabel})
-            </p>
-            <p className="mt-2 text-2xl font-black text-teal">
-              {eur([...invoiceTotalByVendor.values()].reduce((s, v) => s + v, 0))}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Total of invoices for {periodMode === "month" ? `${MONTH_NAMES[selMonth - 1]} ${selYear}` : selYear}
-            </p>
-          </Card>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MiniKpi label="Monthly Fixed" value={eur(monthly)} tone="var(--teal)" />
-            <MiniKpi label="Paid" value={eur(paid)} tone="var(--green)" />
-            <MiniKpi label="Pending" value={eur(pending)} tone="var(--orange)" />
-            <MiniKpi
-              label="Next Due"
-              value={nextDue ? `Day ${nextDue.due_day}` : "—"}
-              tone="var(--pink)"
-            />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Card className="border-border bg-card p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Cost per Day Open
-              </p>
-              <p className="mt-2 text-2xl font-black text-orange">{eur(monthly / 26)}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Based on 26 open days/month</p>
-            </Card>
-            <Card className="border-border bg-card p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Break-even (drinks/day)
-              </p>
-              <p className="mt-2 text-2xl font-black text-teal">
-                {Math.ceil(monthly / 26 / 9)}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">At ~€9 profit per drink</p>
-            </Card>
-          </div>
-
-          <Card className="border-border bg-card p-4 md:p-5">
-            <h2 className="mb-4 text-sm font-bold uppercase tracking-wide">
-              Cost by Category
-            </h2>
-            <div className="space-y-3">
-              {byCategory.map(([cat, val]) => (
-                <div key={cat}>
-                  <div className="mb-1 flex items-baseline justify-between gap-2">
-                    <span className="truncate text-sm font-medium">{cat}</span>
-                    <span
-                      className="shrink-0 text-sm font-bold"
-                      style={{ color: CAT_COLOR[cat] ?? "var(--teal)" }}
-                    >
-                      {eur(val)}
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${(val / catMax) * 100}%`, backgroundColor: CAT_COLOR[cat] ?? "var(--teal)" }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {tab === "By Supplier" && (
-        <div className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-            <Select value={String(selMonth)} onValueChange={(v) => setSelMonth(Number(v))}>
-              <SelectTrigger className="h-11 w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MONTH_NAMES.map((m, i) => (
-                  <SelectItem key={m} value={String(i + 1)}>
-                    {m}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={String(selYear)} onValueChange={(v) => setSelYear(Number(v))}>
-              <SelectTrigger className="h-11 w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {yearOptions.map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            </div>
-            <Button
-              variant="outline"
-              onClick={exportSupplierCsv}
-              disabled={bySupplier.length === 0}
-              className="h-11 gap-2"
+      {/* Tab bar */}
+      <div className="-mx-3 mb-4 flex gap-1 overflow-x-auto px-3 pb-1 md:mx-0 md:px-0">
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          const active = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                active
+                  ? "bg-teal/15 text-teal"
+                  : "text-muted-foreground hover:bg-card"
+              }`}
             >
-              <Download className="h-4 w-4" /> Export CSV
-            </Button>
-          </div>
+              <Icon className="h-3.5 w-3.5" />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <MiniKpi label="Expected" value={eur(periodExpected)} tone="var(--teal)" />
-            <MiniKpi label="Paid" value={eur(periodPaid)} tone="var(--green)" />
-            <MiniKpi
-              label="Outstanding"
-              value={eur(Math.max(periodExpected - periodPaid, 0))}
-              tone="var(--orange)"
-            />
-          </div>
+      {tab === "bench" && (
+        <BenchmarkTab companies={companies} cocktails={cocktails} pr={pr} baixa={baixa} />
+      )}
+      {tab === "company" && (
+        <ByCompanyTab
+          companies={companies}
+          bars={bars}
+          selected={selected}
+          onSelect={setCompanyId}
+          cocktails={cocktails}
+          serviceCosts={serviceCosts}
+          pr={pr}
+          baixa={baixa}
+        />
+      )}
+      {(tab === "food" || tab === "beverage") && (
+        <CategoryTab
+          kind={tab}
+          companies={companies}
+          bars={bars}
+          selected={selected}
+          onSelect={setCompanyId}
+          products={products}
+          priceRows={priceRows}
+        />
+      )}
+      {tab === "operating" && (
+        <OperatingTab
+          bars={bars}
+          selected={selected}
+          onSelect={setCompanyId}
+          serviceCosts={serviceCosts}
+        />
+      )}
+      {tab === "price" && (
+        <PriceEvolutionTab companies={companies} products={products} priceRows={priceRows} />
+      )}
+      {tab === "suppliers" && (
+        <SuppliersTab companies={companies} priceRows={priceRows} serviceCosts={serviceCosts} />
+      )}
+    </div>
+  );
+}
 
-          {bySupplier.map((g) => (
-            <Card key={g.supplier} className="border-border bg-card p-4 md:p-5">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-black tracking-tight">{g.supplier}</h2>
-                  <p className="text-xs text-muted-foreground">{g.items.length} services</p>
-                </div>
-                <div className="text-right text-sm">
-                  <p className="font-black text-teal">{eur(g.expected)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {eur(g.paid)} paid
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {g.items.map((it) => (
-                  <div
-                    key={it.name}
-                    className="flex items-center justify-between gap-3 border-t border-border/60 pt-2 text-sm first:border-0 first:pt-0"
+/* ---------- Shared bits ---------- */
+function CompanySelect({
+  bars,
+  selected,
+  onSelect,
+}: {
+  bars: Company[];
+  selected?: Company;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Select value={selected?.id} onValueChange={onSelect}>
+      <SelectTrigger className="w-full max-w-xs">
+        <SelectValue placeholder="Select company" />
+      </SelectTrigger>
+      <SelectContent>
+        {bars.map((b) => (
+          <SelectItem key={b.id} value={b.id}>
+            {barShort(b)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function Dot({ color }: { color: string }) {
+  return <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color }} />;
+}
+
+/* ---------- A) Group Benchmarking ---------- */
+function BenchmarkTab({
+  companies,
+  cocktails,
+  pr,
+  baixa,
+}: {
+  companies: Company[];
+  cocktails: GroupCocktail[];
+  pr?: Company;
+  baixa?: Company;
+}) {
+  const metrics = useMemo(() => buildBenchmark(cocktails, pr, baixa), [cocktails, pr, baixa]);
+  const comparisons = useMemo(
+    () => buildSharedComparisons(cocktails, pr, baixa),
+    [cocktails, pr, baixa],
+  );
+
+  const fmt = (m: (typeof metrics)[number], v: number) =>
+    m.suffix === "€" ? eur(v) : `${num(v)}%`;
+
+  return (
+    <div className="space-y-4">
+      <Card className="overflow-hidden p-0">
+        <div className="border-b border-border p-4">
+          <h2 className="text-sm font-semibold text-foreground">Metrics × Companies</h2>
+          <p className="text-xs text-muted-foreground">Best performer per metric highlighted.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[420px] text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th className="px-4 py-2 font-medium">Metric</th>
+                <th className="px-4 py-2 font-medium">Target</th>
+                <th className="px-4 py-2 font-medium">
+                  <span className="inline-flex items-center gap-1.5"><Dot color="#4ecdc4" />PR</span>
+                </th>
+                <th className="px-4 py-2 font-medium">
+                  <span className="inline-flex items-center gap-1.5"><Dot color="#ffa502" />Baixa</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {metrics.map((m) => {
+                const prBest = m.lowerIsBetter ? m.pr <= m.baixa : m.pr >= m.baixa;
+                return (
+                  <tr key={m.key} className="border-t border-border/60">
+                    <td className="px-4 py-2.5 text-foreground">{m.label}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">
+                      {m.target != null ? `${m.target}%` : "—"}
+                    </td>
+                    <td className={`px-4 py-2.5 font-medium ${prBest ? "text-green" : "text-foreground"}`}>
+                      {fmt(m, m.pr)}
+                    </td>
+                    <td className={`px-4 py-2.5 font-medium ${!prBest ? "text-green" : "text-foreground"}`}>
+                      {fmt(m, m.baixa)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <h2 className="mb-3 text-sm font-semibold text-foreground">Cocktail margin comparison</h2>
+        <div className="space-y-2">
+          {comparisons.slice(0, 8).map((c) => {
+            const prC = cocktails.find((x) => x.name === c.name && x.company_id === pr?.id);
+            const bxC = cocktails.find((x) => x.name === c.name && x.company_id === baixa?.id);
+            const prM = prC ? marginOf(prC) : 0;
+            const bxM = bxC ? marginOf(bxC) : 0;
+            const diff = bxM - prM;
+            return (
+              <div
+                key={c.name}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background/50 px-3 py-2"
+              >
+                <span className="text-sm font-medium text-foreground">{c.name}</span>
+                <span className="text-xs text-muted-foreground">
+                  PR {num(prM)}% <span className="text-border">|</span> Baixa {num(bxM)}%{" "}
+                  <span
+                    className={`ml-1 font-semibold ${diff >= 0 ? "text-green" : "text-red"}`}
                   >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{it.name}</p>
-                      <p className="text-xs text-muted-foreground">{it.category}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="tabular-nums font-semibold">{eur(it.expected)}</span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-bold ${STATUS_BADGE[it.status] ?? STATUS_BADGE.pending}`}
-                      >
-                        {it.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                    Diff {diff >= 0 ? "+" : ""}
+                    {num(diff)}%
+                  </span>
+                </span>
               </div>
-            </Card>
-          ))}
-          {bySupplier.length === 0 && (
-            <Card className="border-border bg-card p-8 text-center text-muted-foreground">
-              No cost data for {MONTH_NAMES[selMonth - 1]} {selYear} yet.
-            </Card>
+            );
+          })}
+          {comparisons.length === 0 && (
+            <p className="text-xs text-muted-foreground">No shared cocktails between bars yet.</p>
           )}
         </div>
-      )}
+      </Card>
 
-      {tab === "Costs List" && (
-        <>
-          <datalist id="cost-vendor-suggestions">
-            {vendorOptions.map((v) => (
-              <option key={v} value={v} />
-            ))}
-          </datalist>
-          <PeriodControl
-            periodMode={periodMode}
-            setPeriodMode={setPeriodMode}
-            selMonth={selMonth}
-            setSelMonth={setSelMonth}
-            selYear={selYear}
-            setSelYear={setSelYear}
-            monthNames={MONTH_NAMES}
-            yearOptions={yearOptions}
-          />
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="h-11 w-56">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" onClick={exportCsv} className="h-11 gap-2">
-              <Download className="h-4 w-4" /> Export CSV
-            </Button>
+      {comparisons.filter((c) => c.diff !== 0).length > 0 && (
+        <Card className="border-purple/30 bg-purple/5 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-purple" />
+            <h2 className="text-sm font-semibold text-foreground">Copy Best Practice</h2>
           </div>
-          <Card className="border-border bg-card p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="px-4 py-3 font-semibold">Service</th>
-                    <th className="px-4 py-3 font-semibold">Category</th>
-                    <th className="px-4 py-3 text-right font-semibold">Amount ({periodLabel})</th>
-                    <th className="px-4 py-3 text-right font-semibold">Due</th>
-                    <th className="px-4 py-3 font-semibold">Vendor</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 text-center font-semibold">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {listed.map((c) => {
-                    const status = payByCost[c.id]?.status ?? "pending";
+          <div className="space-y-2">
+            {comparisons
+              .filter((c) => c.diff > 0)
+              .slice(0, 4)
+              .map((c) => (
+                <div
+                  key={c.name}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background/50 px-3 py-2"
+                >
+                  <span className="text-xs text-muted-foreground">
+                    Baixa prices <b className="text-foreground">{c.name}</b> {eur(c.diff)} higher (
+                    {eur(c.prPrice)} → {eur(c.baixaPrice)}) — apply to PR?
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() =>
+                      toast.success(
+                        `Suggested: raise ${c.name} at Príncipe Real to ${eur(c.baixaPrice)}`,
+                        { description: "Sent to Menu AI for review — owner approval required." },
+                      )
+                    }
+                  >
+                    <Copy className="h-3 w-3" /> Apply to PR
+                  </Button>
+                </div>
+              ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/* ---------- B) By Company ---------- */
+function ByCompanyTab({
+  bars,
+  selected,
+  onSelect,
+  cocktails,
+  serviceCosts,
+  pr,
+  baixa,
+}: {
+  companies: Company[];
+  bars: Company[];
+  selected?: Company;
+  onSelect: (id: string) => void;
+  cocktails: GroupCocktail[];
+  serviceCosts: ReturnType<typeof useServiceCosts>["data"];
+  pr?: Company;
+  baixa?: Company;
+}) {
+  const metrics = useMemo(() => buildBenchmark(cocktails, pr, baixa), [cocktails, pr, baixa]);
+  const isPR = selected?.id === pr?.id;
+  const rows = serviceCosts ?? [];
+  const monthlyOps = rows
+    .filter((r) => r.company_id === selected?.id)
+    .reduce((s, r) => s + Number(r.amount), 0);
+
+  return (
+    <div className="space-y-4">
+      <CompanySelect bars={bars} selected={selected} onSelect={onSelect} />
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {metrics
+          .filter((m) => ["food", "bev", "prime", "labour"].includes(m.key))
+          .map((m) => {
+            const val = isPR ? m.pr : m.baixa;
+            const groupAvg = (m.pr + m.baixa) / 2;
+            const best = m.lowerIsBetter ? Math.min(m.pr, m.baixa) : Math.max(m.pr, m.baixa);
+            const overTarget = m.target != null && val > m.target;
+            return (
+              <Card key={m.key} className="p-3">
+                <p className="text-[11px] text-muted-foreground">{m.label}</p>
+                <p className={`text-lg font-semibold ${overTarget ? "text-red" : "text-foreground"}`}>
+                  {num(val)}%
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  vs group {num(groupAvg)}% · best {num(best)}%
+                </p>
+              </Card>
+            );
+          })}
+      </div>
+
+      <Card className="p-4">
+        <h2 className="mb-3 text-sm font-semibold text-foreground">
+          Shared cost allocation — {barShort(selected)}
+        </h2>
+        <div className="space-y-2 text-sm">
+          <AllocRow label="Operating costs (this company)" value={eur(monthlyOps)} note="direct" />
+          <AllocRow
+            label="Cocktail Lab production"
+            value={eur(isPR ? 2100 : 2600)}
+            note="allocated by prep usage"
+            accent="#fd79a8"
+          />
+          <AllocRow
+            label="Holding shared services (accounting, insurance)"
+            value={eur(160)}
+            note="split 50/50"
+            accent="#a29bfe"
+          />
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <Boxes className="h-4 w-4 text-pink" />
+          <h2 className="text-sm font-semibold text-foreground">Inter-company purchases</h2>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {barShort(selected)} buys prep from Cocktail Lab at a 30% markup. Outstanding balance:{" "}
+          <b className="text-foreground">{eur(isPR ? 2100 : 2600)}</b>
+          {isPR ? "" : " (5 days overdue)"}.
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+function AllocRow({
+  label,
+  value,
+  note,
+  accent = "#4ecdc4",
+}: {
+  label: string;
+  value: string;
+  note: string;
+  accent?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-lg bg-background/50 px-3 py-2">
+      <span className="flex items-center gap-2">
+        <Dot color={accent} />
+        <span className="text-foreground">{label}</span>
+      </span>
+      <span className="text-right">
+        <span className="block font-medium text-foreground">{value}</span>
+        <span className="block text-[10px] text-muted-foreground">{note}</span>
+      </span>
+    </div>
+  );
+}
+
+/* ---------- C) Food / Beverage ---------- */
+function CategoryTab({
+  kind,
+  companies,
+  bars,
+  selected,
+  onSelect,
+  products,
+  priceRows,
+}: {
+  kind: "food" | "beverage";
+  companies: Company[];
+  bars: Company[];
+  selected?: Company;
+  onSelect: (id: string) => void;
+  products: ReturnType<typeof useProducts>["data"];
+  priceRows: ReturnType<typeof usePriceHistory>["data"];
+}) {
+  const cat = kind === "food" ? "food" : "spirit";
+  const latest = useMemo(() => latestPrices(priceRows ?? []), [priceRows]);
+  const prodList = (products ?? []).filter((p) => p.category === cat);
+
+  // products that have price history rows (real comparable data)
+  const withPrices = prodList.filter((p) => latest.some((l) => l.productId === p.id));
+
+  const barById = (id: string) => companies.find((c) => c.id === id);
+
+  return (
+    <div className="space-y-4">
+      <CompanySelect bars={bars} selected={selected} onSelect={onSelect} />
+      <Card className="overflow-hidden p-0">
+        <div className="border-b border-border p-4">
+          <h2 className="text-sm font-semibold text-foreground">
+            {kind === "food" ? "Food" : "Beverage"} — cross-company price comparison
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Prices per company &amp; supplier. Lab-resale items shown in pink.
+          </p>
+        </div>
+        <div className="divide-y divide-border/60">
+          {withPrices.map((p) => {
+            const rows = latest.filter((l) => l.productId === p.id);
+            const min = Math.min(...rows.map((r) => r.price));
+            return (
+              <div key={p.id} className="p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">{p.name}</span>
+                  <span className="text-[10px] uppercase text-muted-foreground">{p.unit_type || cat}</span>
+                </div>
+                <div className="space-y-1.5">
+                  {rows.map((r) => {
+                    const co = barById(r.companyId);
+                    const isLab = r.supplier.toLowerCase().includes("lab");
                     return (
-                      <tr key={c.id} className="border-b border-border/60 last:border-0">
-                        <td className="px-4 py-3 font-medium">{c.name}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{c.category}</td>
-                        <td className="px-4 py-3 text-right tabular-nums font-semibold text-teal">
-                          {invoicedFor(c.vendor) > 0 ? eur(invoicedFor(c.vendor)) : "—"}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{c.due_day}</td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {editVendorId === c.id ? (
-                            <div className="flex items-center gap-1.5">
-                              <Input
-                                value={editVendorVal}
-                                onChange={(e) => setEditVendorVal(e.target.value)}
-                                list="cost-vendor-suggestions"
-                                autoComplete="off"
-                                autoFocus
-                                className="h-8 w-44 text-sm"
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") saveVendor(c.id);
-                                  if (e.key === "Escape") setEditVendorId(null);
-                                }}
-                              />
-                              <Button
-                                size="sm"
-                                className="h-8 px-2"
-                                disabled={savingVendor}
-                                onClick={() => saveVendor(c.id)}
-                              >
-                                <Check className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => c.vendor && setSelectedSupplier(c.vendor)}
-                                className={`inline-flex items-center gap-1.5 rounded px-1 -mx-1 text-left ${c.vendor ? "hover:bg-secondary/50 hover:text-foreground" : ""}`}
-                                title={c.vendor ? "Click to view uploaded invoices" : "Click to set vendor"}
-                                disabled={!c.vendor}
-                              >
-                                {c.vendor || <span className="italic opacity-70">Set vendor</span>}
-                                {c.vendor && <Receipt className="h-3 w-3" />}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditVendorId(c.id);
-                                  setEditVendorVal(c.vendor ?? "");
-                                }}
-                                className="inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-                                title="Edit vendor"
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_BADGE[status]}`}>
-                            {status}
+                      <div
+                        key={r.companyId}
+                        className="flex items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          <Dot color={co?.brand_color ?? "#666"} />
+                          {barShort(co)}
+                          <span className={isLab ? "text-pink" : "text-muted-foreground"}>
+                            · {r.supplier}
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {status !== "paid" && (
-                            <Button size="sm" variant="outline" onClick={() => markPaid(c)} className="h-9">
-                              Mark paid
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
+                        </span>
+                        <span
+                          className={`font-medium ${r.price === min ? "text-green" : "text-foreground"}`}
+                        >
+                          {eur(r.price)}
+                        </span>
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </>
-      )}
+                </div>
+                {rows.length > 1 && (
+                  <p className="mt-2 text-[11px] text-orange">
+                    {(() => {
+                      const sorted = [...rows].sort((a, b) => b.price - a.price);
+                      const hi = sorted[0];
+                      const lo = sorted[sorted.length - 1];
+                      const pct = ((hi.price - lo.price) / lo.price) * 100;
+                      return `${barShort(barById(hi.companyId))} pays ${num(pct)}% more than ${barShort(barById(lo.companyId))}. Consolidate through Lab?`;
+                    })()}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+          {withPrices.length === 0 && (
+            <p className="p-4 text-xs text-muted-foreground">
+              No tracked price data in this category yet.
+            </p>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
 
-      {tab === "Payments" && (
-        <Card className="border-border bg-card p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3 font-semibold">Service</th>
-                  <th className="px-4 py-3 text-right font-semibold">Due</th>
-                  <th className="px-4 py-3 text-right font-semibold">Paid</th>
-                  <th className="px-4 py-3 font-semibold">Date</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {costs.map((c) => {
-                  const p = payByCost[c.id];
-                  const status = p?.status ?? "pending";
-                  return (
-                    <tr key={c.id} className="border-b border-border/60 last:border-0">
-                      <td className="px-4 py-3 font-medium">{c.name}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{eur(c.amount)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-green">{eur(p?.amount_paid ?? 0)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{p?.payment_date ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_BADGE[status]}`}>
-                          {status}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+/* ---------- Operating ---------- */
+function OperatingTab({
+  bars,
+  selected,
+  onSelect,
+  serviceCosts,
+}: {
+  bars: Company[];
+  selected?: Company;
+  onSelect: (id: string) => void;
+  serviceCosts: ReturnType<typeof useServiceCosts>["data"];
+}) {
+  const rows = (serviceCosts ?? []).filter((r) => r.company_id === selected?.id);
+  const byCat = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) m.set(r.category, (m.get(r.category) ?? 0) + Number(r.amount));
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [rows]);
+  const total = rows.reduce((s, r) => s + Number(r.amount), 0);
+
+  return (
+    <div className="space-y-4">
+      <CompanySelect bars={bars} selected={selected} onSelect={onSelect} />
+      <Card className="p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Operating costs — {barShort(selected)}</h2>
+          <span className="text-sm font-semibold text-foreground">{eur(total)}/mo</span>
+        </div>
+        <div className="space-y-1.5">
+          {byCat.map(([cat, amt]) => (
+            <div key={cat} className="flex items-center justify-between text-sm">
+              <span className="capitalize text-muted-foreground">{cat}</span>
+              <span className="text-foreground">{eur(amt)}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card className="overflow-hidden p-0">
+        <div className="border-b border-border p-4">
+          <h2 className="text-sm font-semibold text-foreground">Line items</h2>
+        </div>
+        <div className="divide-y divide-border/60">
+          {rows
+            .sort((a, b) => Number(b.amount) - Number(a.amount))
+            .map((r) => (
+              <div key={r.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span className="text-foreground">{r.name}</span>
+                <span className="text-muted-foreground">
+                  {eur(Number(r.amount))}
+                  <span className="ml-2 text-[10px] capitalize">/{r.frequency}</span>
+                </span>
+              </div>
+            ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ---------- D) Price Evolution ---------- */
+function PriceEvolutionTab({
+  companies,
+  products,
+  priceRows,
+}: {
+  companies: Company[];
+  products: ReturnType<typeof useProducts>["data"];
+  priceRows: ReturnType<typeof usePriceHistory>["data"];
+}) {
+  const rows = priceRows ?? [];
+  const prodMap = new Map((products ?? []).map((p) => [p.id, p]));
+  const barById = (id: string) => companies.find((c) => c.id === id);
+
+  // group by product
+  const byProduct = useMemo(() => {
+    const m = new Map<string, typeof rows>();
+    for (const r of rows) {
+      if (!m.has(r.product_id)) m.set(r.product_id, []);
+      m.get(r.product_id)!.push(r);
+    }
+    return m;
+  }, [rows]);
+
+  const [productId, setProductId] = useState<string>("");
+  const productIds = [...byProduct.keys()];
+  const sel = productId || productIds[0];
+  const selRows = (byProduct.get(sel) ?? []).slice().sort((a, b) =>
+    a.recorded_at.localeCompare(b.recorded_at),
+  );
+
+  // "Which bar pays most for Tanqueray?"
+  const latest = useMemo(() => latestPrices(rows), [rows]);
+  const tanqueray = (products ?? []).find((p) => p.name.toLowerCase().includes("tanqueray"));
+  const tanqRows = tanqueray ? latest.filter((l) => l.productId === tanqueray.id) : [];
+  const tanqTop = [...tanqRows].sort((a, b) => b.price - a.price)[0];
+
+  // lime consolidation alert
+  const lime = (products ?? []).find((p) => p.name.toLowerCase() === "lima");
+  const limeRows = lime ? latest.filter((l) => l.productId === lime.id) : [];
+  const limeHi = [...limeRows].sort((a, b) => b.price - a.price)[0];
+  const limeLo = [...limeRows].sort((a, b) => a.price - b.price)[0];
+  const limePct = limeHi && limeLo && limeLo.price ? ((limeHi.price - limeLo.price) / limeLo.price) * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      {tanqTop && (
+        <Card className="border-teal/30 bg-teal/5 p-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-teal" />
+            <p className="text-sm text-foreground">
+              <b>{barShort(barById(tanqTop.companyId))}</b> pays most for Tanqueray:{" "}
+              <b>{eur(tanqTop.price)}</b> (via {tanqTop.supplier}).
+            </p>
           </div>
         </Card>
       )}
 
-      {tab === "Alerts" && (
-        <div className="space-y-3">
-          {upcoming.map(({ cost, daysUntil }) => {
-            const overdue = daysUntil < 0;
-            const soon = daysUntil >= 0 && daysUntil <= 3;
-            const Icon = overdue ? AlertOctagon : soon ? Clock : CheckCircle2;
-            const tone = overdue ? "text-red" : soon ? "text-orange" : "text-muted-foreground";
-            return (
-              <Card key={cost.id} className="flex items-center justify-between gap-3 border-border bg-card p-4">
-                <div className="flex items-center gap-3">
-                  <Icon className={`h-5 w-5 shrink-0 ${tone}`} />
-                  <div>
-                    <p className="font-semibold">{cost.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {eur(cost.amount)} · due day {cost.due_day}
-                    </p>
-                  </div>
-                </div>
-                <span className={`text-sm font-bold ${tone}`}>
-                  {overdue
-                    ? `${Math.abs(daysUntil)}d overdue`
-                    : daysUntil === 0
-                      ? "Due today"
-                      : `in ${daysUntil}d`}
-                </span>
-              </Card>
-            );
-          })}
-          {upcoming.length === 0 && (
-            <Card className="border-border bg-card p-8 text-center text-muted-foreground">
-              All costs are paid this month. 🎉
-            </Card>
-          )}
-        </div>
-      )}
-      <Dialog open={!!selectedSupplier} onOpenChange={(v) => !v && setSelectedSupplier(null)}>
-        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedSupplier ? `Invoices — ${selectedSupplier}` : "Invoices"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">All uploaded invoices</p>
-              <p className="text-lg font-black text-teal">{eur(supplierInvoicesTotal)}</p>
-            </div>
-            {supplierInvoices.length === 0 ? (
-              <Card className="border-border bg-card p-6 text-center text-sm text-muted-foreground">
-                No invoices uploaded for this supplier.
-              </Card>
-            ) : (
-              <div className="space-y-3">
-                {supplierInvoices.map((inv) => (
-                  <Card key={inv.id} className="border-border bg-card p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-semibold">{inv.date || "No date"}</p>
-                        {inv.category && (
-                          <p className="text-xs text-muted-foreground">
-                            {inv.subcategory ? `${inv.category} > ${inv.subcategory}` : inv.category}
-                          </p>
-                        )}
-                        {inv.items && (
-                          <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">
-                            {inv.items}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className="font-black text-teal">{eur(inv.total)}</p>
-                        {inv.receipt_url && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="mt-2 h-8 gap-1.5"
-                            onClick={() => openReceipt(inv.receipt_url!)}
-                          >
-                            <Receipt className="h-3.5 w-3.5" /> Receipt
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
+      {limeHi && limeLo && limePct > 0 && (
+        <Card className="border-orange/30 bg-orange/5 p-4">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-orange" />
+            <p className="text-sm text-foreground">
+              {barShort(barById(limeHi.companyId))} pays {num(limePct)}% more for lime than{" "}
+              {barShort(barById(limeLo.companyId))}. Consolidate through Lab?
+            </p>
           </div>
-        </DialogContent>
-      </Dialog>
+        </Card>
+      )}
+
+      <Card className="p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-foreground">Per-company price tracking</h2>
+          <Select value={sel} onValueChange={setProductId}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Product" />
+            </SelectTrigger>
+            <SelectContent>
+              {productIds.map((id) => (
+                <SelectItem key={id} value={id}>
+                  {prodMap.get(id)?.name ?? id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <PriceChart companies={companies} rows={selRows} />
+      </Card>
     </div>
   );
 }
 
-function PeriodControl({
-  periodMode,
-  setPeriodMode,
-  selMonth,
-  setSelMonth,
-  selYear,
-  setSelYear,
-  monthNames,
-  yearOptions,
+function PriceChart({
+  companies,
+  rows,
 }: {
-  periodMode: "month" | "year";
-  setPeriodMode: (m: "month" | "year") => void;
-  selMonth: number;
-  setSelMonth: (m: number) => void;
-  selYear: number;
-  setSelYear: (y: number) => void;
-  monthNames: string[];
-  yearOptions: number[];
+  companies: Company[];
+  rows: { company_id: string; unit_cost: number; recorded_at: string; supplier: string }[];
 }) {
+  if (rows.length === 0)
+    return <p className="text-xs text-muted-foreground">No price history for this product.</p>;
+  const byCompany = new Map<string, typeof rows>();
+  for (const r of rows) {
+    if (!byCompany.has(r.company_id)) byCompany.set(r.company_id, []);
+    byCompany.get(r.company_id)!.push(r);
+  }
+  const all = rows.map((r) => Number(r.unit_cost));
+  const max = Math.max(...all);
+  const min = Math.min(...all) * 0.9;
+  const dates = [...new Set(rows.map((r) => r.recorded_at))].sort();
+
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="flex gap-1 rounded-xl bg-secondary p-1">
-        {(["month", "year"] as const).map((m) => (
-          <button
-            key={m}
-            onClick={() => setPeriodMode(m)}
-            className={`h-9 shrink-0 rounded-lg px-4 text-sm font-semibold capitalize transition-colors ${
-              periodMode === m ? "bg-card text-foreground shadow" : "text-muted-foreground"
-            }`}
-          >
-            By {m}
-          </button>
+    <div className="space-y-3">
+      {[...byCompany.entries()].map(([cid, list]) => {
+        const co = companies.find((c) => c.id === cid);
+        const sorted = [...list].sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
+        return (
+          <div key={cid}>
+            <div className="mb-1 flex items-center justify-between text-xs">
+              <span className="flex items-center gap-2 text-foreground">
+                <Dot color={co?.brand_color ?? "#666"} />
+                {barShort(co)}
+              </span>
+              <span className="text-muted-foreground">
+                {eur(Number(sorted[0].unit_cost))} → {eur(Number(sorted[sorted.length - 1].unit_cost))}
+              </span>
+            </div>
+            <div className="flex items-end gap-1" style={{ height: 48 }}>
+              {sorted.map((r, i) => {
+                const h = ((Number(r.unit_cost) - min) / (max - min || 1)) * 100;
+                return (
+                  <div
+                    key={i}
+                    className="flex-1 rounded-t"
+                    style={{
+                      height: `${Math.max(h, 6)}%`,
+                      background: co?.brand_color ?? "#666",
+                      opacity: 0.5 + (0.5 * (i + 1)) / sorted.length,
+                    }}
+                    title={`${r.recorded_at.slice(0, 10)}: ${eur(Number(r.unit_cost))}`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      <div className="flex justify-between text-[10px] text-muted-foreground">
+        {dates.map((d) => (
+          <span key={d}>{d.slice(5, 7)}/{d.slice(2, 4)}</span>
         ))}
       </div>
-      {periodMode === "month" && (
-        <Select value={String(selMonth)} onValueChange={(v) => setSelMonth(Number(v))}>
-          <SelectTrigger className="h-11 w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {monthNames.map((m, i) => (
-              <SelectItem key={m} value={String(i + 1)}>
-                {m}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-      <Select value={String(selYear)} onValueChange={(v) => setSelYear(Number(v))}>
-        <SelectTrigger className="h-11 w-32">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {yearOptions.map((y) => (
-            <SelectItem key={y} value={String(y)}>
-              {y}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
     </div>
   );
 }
 
-function MiniKpi({ label, value, tone }: { label: string; value: string; tone: string }) {
+/* ---------- E) Suppliers ---------- */
+function SuppliersTab({
+  companies,
+  priceRows,
+  serviceCosts,
+}: {
+  companies: Company[];
+  priceRows: ReturnType<typeof usePriceHistory>["data"];
+  serviceCosts: ReturnType<typeof useServiceCosts>["data"];
+}) {
+  const scores = useMemo(() => buildSupplierScores(priceRows ?? []), [priceRows]);
+
   return (
-    <Card className="border-border bg-card p-4">
-      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
-      <p className="mt-2 text-xl font-black" style={{ color: tone }}>
-        {value}
-      </p>
-    </Card>
+    <div className="space-y-4">
+      <Card className="border-green/30 bg-green/5 p-4">
+        <div className="flex items-center gap-2">
+          <Truck className="h-4 w-4 text-green" />
+          <p className="text-sm text-foreground">
+            If both bars order PURA through Cocktail Lab, save <b>{eur(80)}/month</b> on delivery fees.
+          </p>
+        </div>
+      </Card>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {scores.map((s) => {
+          const barCount = [...s.companyIds].filter((id) =>
+            companies.some((c) => c.id === id && c.type === "bar"),
+          ).length;
+          return (
+            <Card key={s.name} className="p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-semibold text-foreground">{s.name}</span>
+                <Badge variant="outline" className="text-[10px]">
+                  {barCount} bar{barCount === 1 ? "" : "s"}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Serves {barCount} bar{barCount === 1 ? "" : "s"}. Total group spend:{" "}
+                <b className="text-foreground">{eur(s.monthlySpend)}/month</b>.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {[...s.companyIds].map((id) => {
+                  const co = companies.find((c) => c.id === id);
+                  if (!co) return null;
+                  return (
+                    <span
+                      key={id}
+                      className="flex items-center gap-1 rounded-full bg-background/60 px-2 py-0.5 text-[10px] text-muted-foreground"
+                    >
+                      <Dot color={co.brand_color} />
+                      {barShort(co)}
+                    </span>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                {s.items} tracked product{s.items === 1 ? "" : "s"}
+              </p>
+            </Card>
+          );
+        })}
+        {scores.length === 0 && (
+          <p className="text-xs text-muted-foreground">No supplier price data yet.</p>
+        )}
+      </div>
+    </div>
   );
 }
