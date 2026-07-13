@@ -43,10 +43,6 @@ const BAR_KEY_COLOR: Record<string, string> = {
   Baixa: "var(--orange)",
   Lab: "var(--pink)",
 };
-function companyBadgeColor(c?: Company): string {
-  if (!c) return "var(--muted-foreground)";
-  return c.brand_color || "var(--muted-foreground)";
-}
 function moveShort(k: "PR" | "Baixa" | "Lab"): string {
   return k === "PR" ? "Príncipe Real" : k === "Baixa" ? "Baixa" : "Lab";
 }
