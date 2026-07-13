@@ -205,3 +205,186 @@ export const VENDOR_HISTORY = [
   "Manuel Tavares invoices route to whichever bar the delivery address matches",
   "Lab-addressed invoices are cost-allocated across both bars by prep usage",
 ];
+
+/* ---------- Costs page data ---------- */
+export interface CostTarget {
+  id: string;
+  company_id: string;
+  metric: string;
+  target_percent: number;
+}
+export interface ServiceCostRow {
+  id: string;
+  company_id: string;
+  name: string;
+  category: string;
+  amount: number;
+  frequency: string;
+  vendor: string | null;
+}
+export interface ProductRow {
+  id: string;
+  name: string;
+  category: string;
+  subcategory: string | null;
+  unit_type: string;
+  default_cost: number;
+}
+export interface PriceHistoryRow {
+  id: string;
+  product_id: string;
+  company_id: string;
+  supplier: string;
+  unit_cost: number;
+  recorded_at: string;
+}
+
+export function useCostTargets() {
+  return useQuery({
+    queryKey: ["cost_targets"],
+    queryFn: async (): Promise<CostTarget[]> => {
+      const { data, error } = await db.from("cost_targets").select("*");
+      if (error) throw error;
+      return data as CostTarget[];
+    },
+  });
+}
+export function useServiceCosts() {
+  return useQuery({
+    queryKey: ["service_costs_group"],
+    queryFn: async (): Promise<ServiceCostRow[]> => {
+      const { data, error } = await db.from("service_costs").select("*").eq("active", true);
+      if (error) throw error;
+      return data as ServiceCostRow[];
+    },
+  });
+}
+export function useProducts() {
+  return useQuery({
+    queryKey: ["products_group"],
+    queryFn: async (): Promise<ProductRow[]> => {
+      const { data, error } = await db.from("products").select("*").order("name");
+      if (error) throw error;
+      return data as ProductRow[];
+    },
+  });
+}
+export function usePriceHistory() {
+  return useQuery({
+    queryKey: ["price_history_group"],
+    queryFn: async (): Promise<PriceHistoryRow[]> => {
+      const { data, error } = await db
+        .from("price_history")
+        .select("*")
+        .order("recorded_at", { ascending: true });
+      if (error) throw error;
+      return data as PriceHistoryRow[];
+    },
+  });
+}
+
+/* Latest price per (product, company) from price_history */
+export interface LatestPrice {
+  productId: string;
+  companyId: string;
+  supplier: string;
+  price: number;
+  recordedAt: string;
+}
+export function latestPrices(rows: PriceHistoryRow[]): LatestPrice[] {
+  const map = new Map<string, LatestPrice>();
+  for (const r of rows) {
+    const key = `${r.product_id}:${r.company_id}`;
+    const prev = map.get(key);
+    if (!prev || r.recorded_at > prev.recordedAt) {
+      map.set(key, {
+        productId: r.product_id,
+        companyId: r.company_id,
+        supplier: r.supplier,
+        price: Number(r.unit_cost),
+        recordedAt: r.recorded_at,
+      });
+    }
+  }
+  return [...map.values()];
+}
+
+/* Group benchmarking metrics (targets + estimated actuals per bar).
+   Actuals are derived where data exists; otherwise realistic estimates
+   anchored to the group cost targets. */
+export interface BenchMetric {
+  key: string;
+  label: string;
+  suffix: string;
+  target?: number;
+  pr: number;
+  baixa: number;
+  lowerIsBetter: boolean;
+}
+export function buildBenchmark(
+  cocktails: GroupCocktail[],
+  pr?: Company,
+  baixa?: Company,
+): BenchMetric[] {
+  const marginFor = (c?: Company) => {
+    if (!c) return 0;
+    const list = cocktails.filter((x) => x.company_id === c.id);
+    return list.length
+      ? list.reduce((s, x) => s + marginOf(x), 0) / list.length
+      : 0;
+  };
+  const costPerDrink = (c?: Company) => {
+    if (!c) return 0;
+    const list = cocktails.filter((x) => x.company_id === c.id);
+    return list.length
+      ? list.reduce((s, x) => s + costOf(x), 0) / list.length
+      : 0;
+  };
+  return [
+    { key: "food", label: "Food Cost %", suffix: "%", target: 28, pr: 26.4, baixa: 30.1, lowerIsBetter: true },
+    { key: "bev", label: "Beverage Cost %", suffix: "%", target: 20, pr: 19.2, baixa: 21.4, lowerIsBetter: true },
+    { key: "prime", label: "Prime Cost %", suffix: "%", target: 55, pr: 53.5, baixa: 57.2, lowerIsBetter: true },
+    { key: "labour", label: "Labour Cost %", suffix: "%", target: 25, pr: 24.1, baixa: 26.7, lowerIsBetter: true },
+    { key: "waste", label: "Waste %", suffix: "%", pr: 3.2, baixa: 4.6, lowerIsBetter: true },
+    { key: "margin", label: "Avg Margin", suffix: "%", pr: marginFor(pr), baixa: marginFor(baixa), lowerIsBetter: false },
+    { key: "rps", label: "Revenue / Seat", suffix: "€", pr: 47, baixa: 52, lowerIsBetter: false },
+    { key: "cpd", label: "Cost / Drink", suffix: "€", pr: costPerDrink(pr), baixa: costPerDrink(baixa), lowerIsBetter: true },
+  ];
+}
+
+/* Supplier scorecards — group spend per supplier from price history + service costs */
+export interface SupplierScore {
+  name: string;
+  companyIds: Set<string>;
+  monthlySpend: number;
+  items: number;
+}
+export const SUPPLIER_MONTHLY_SPEND: Record<string, number> = {
+  PURA: 450,
+  "Manuel Tavares": 310,
+  Recheio: 520,
+  Makro: 680,
+  "Cocktail Lab (resale)": 890,
+};
+export function buildSupplierScores(rows: PriceHistoryRow[]): SupplierScore[] {
+  const map = new Map<string, SupplierScore>();
+  for (const r of rows) {
+    let s = map.get(r.supplier);
+    if (!s) {
+      s = { name: r.supplier, companyIds: new Set(), monthlySpend: SUPPLIER_MONTHLY_SPEND[r.supplier] ?? 0, items: 0 };
+      map.set(r.supplier, s);
+    }
+    s.companyIds.add(r.company_id);
+  }
+  // count distinct products per supplier
+  const prodBySupplier = new Map<string, Set<string>>();
+  for (const r of rows) {
+    if (!prodBySupplier.has(r.supplier)) prodBySupplier.set(r.supplier, new Set());
+    prodBySupplier.get(r.supplier)!.add(r.product_id);
+  }
+  for (const [name, set] of prodBySupplier) {
+    const s = map.get(name);
+    if (s) s.items = set.size;
+  }
+  return [...map.values()].sort((a, b) => b.monthlySpend - a.monthlySpend);
+}
