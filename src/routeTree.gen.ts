@@ -23,6 +23,7 @@ import { Route as AuthenticatedSalesRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedPrepRouteImport } from './routes/_authenticated/prep'
 import { Route as AuthenticatedInvoicesRouteImport } from './routes/_authenticated/invoices'
+import { Route as AuthenticatedCostsRouteImport } from './routes/_authenticated/costs'
 import { Route as AuthenticatedCalculatorsRouteImport } from './routes/_authenticated/calculators'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 import { Route as AuthenticatedAiManagerRouteImport } from './routes/_authenticated/ai-manager'
@@ -96,6 +97,11 @@ const AuthenticatedInvoicesRoute = AuthenticatedInvoicesRouteImport.update({
   path: '/invoices',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCostsRoute = AuthenticatedCostsRouteImport.update({
+  id: '/costs',
+  path: '/costs',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedCalculatorsRoute =
   AuthenticatedCalculatorsRouteImport.update({
     id: '/calculators',
@@ -122,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/ai-manager': typeof AuthenticatedAiManagerRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/calculators': typeof AuthenticatedCalculatorsRoute
+  '/costs': typeof AuthenticatedCostsRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
   '/prep': typeof AuthenticatedPrepRoute
   '/profile': typeof AuthenticatedProfileRoute
@@ -139,6 +146,7 @@ export interface FileRoutesByTo {
   '/ai-manager': typeof AuthenticatedAiManagerRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/calculators': typeof AuthenticatedCalculatorsRoute
+  '/costs': typeof AuthenticatedCostsRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
   '/prep': typeof AuthenticatedPrepRoute
   '/profile': typeof AuthenticatedProfileRoute
@@ -159,6 +167,7 @@ export interface FileRoutesById {
   '/_authenticated/ai-manager': typeof AuthenticatedAiManagerRoute
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/calculators': typeof AuthenticatedCalculatorsRoute
+  '/_authenticated/costs': typeof AuthenticatedCostsRoute
   '/_authenticated/invoices': typeof AuthenticatedInvoicesRoute
   '/_authenticated/prep': typeof AuthenticatedPrepRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
@@ -180,6 +189,7 @@ export interface FileRouteTypes {
     | '/ai-manager'
     | '/analytics'
     | '/calculators'
+    | '/costs'
     | '/invoices'
     | '/prep'
     | '/profile'
@@ -197,6 +207,7 @@ export interface FileRouteTypes {
     | '/ai-manager'
     | '/analytics'
     | '/calculators'
+    | '/costs'
     | '/invoices'
     | '/prep'
     | '/profile'
@@ -216,6 +227,7 @@ export interface FileRouteTypes {
     | '/_authenticated/ai-manager'
     | '/_authenticated/analytics'
     | '/_authenticated/calculators'
+    | '/_authenticated/costs'
     | '/_authenticated/invoices'
     | '/_authenticated/prep'
     | '/_authenticated/profile'
@@ -335,6 +347,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInvoicesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/costs': {
+      id: '/_authenticated/costs'
+      path: '/costs'
+      fullPath: '/costs'
+      preLoaderRoute: typeof AuthenticatedCostsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/calculators': {
       id: '/_authenticated/calculators'
       path: '/calculators'
@@ -363,6 +382,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAiManagerRoute: typeof AuthenticatedAiManagerRoute
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedCalculatorsRoute: typeof AuthenticatedCalculatorsRoute
+  AuthenticatedCostsRoute: typeof AuthenticatedCostsRoute
   AuthenticatedInvoicesRoute: typeof AuthenticatedInvoicesRoute
   AuthenticatedPrepRoute: typeof AuthenticatedPrepRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
@@ -378,6 +398,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAiManagerRoute: AuthenticatedAiManagerRoute,
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedCalculatorsRoute: AuthenticatedCalculatorsRoute,
+  AuthenticatedCostsRoute: AuthenticatedCostsRoute,
   AuthenticatedInvoicesRoute: AuthenticatedInvoicesRoute,
   AuthenticatedPrepRoute: AuthenticatedPrepRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
