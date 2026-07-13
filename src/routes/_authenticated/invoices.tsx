@@ -222,61 +222,99 @@ function CompanyBadge({ company }: { company?: Company }) {
 function UploadTab({
   companies,
   bars,
-  onExtracted,
+  onBatch,
 }: {
   companies: Company[];
   bars: Company[];
-  onExtracted: (d: Draft) => void;
+  onBatch: (drafts: Draft[]) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const scan = useServerFn(scanReceipt);
   const [stage, setStage] = useState<UploadStage | null>(null);
+  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
   const [preselect, setPreselect] = useState<string>("auto");
   const [split, setSplit] = useState(false);
   const [dragging, setDragging] = useState(false);
 
+  // Scan a single file into a Draft (no UI staging). Throws on failure.
+  async function scanOne(file: File): Promise<Draft> {
+    const dataUrl = await toDataUrl(file);
+    const parsed = await scan({
+      data: { fileDataUrl: dataUrl, mimeType: file.type, filename: file.name },
+    });
+    const addr = "";
+    const route = routeInvoice(companies, {
+      deliveryAddress: addr,
+      vendor: parsed.vendor,
+      total: parsed.grand_total,
+      date: parsed.date ? new Date(parsed.date) : new Date(),
+    });
+    const forced = preselect !== "auto" ? preselect : route.company?.id;
+    return {
+      vendor: parsed.vendor,
+      date: parsed.date,
+      total: parsed.grand_total,
+      items: parsed.items.map((i) => ({
+        product: i.product,
+        qty: i.qty,
+        unit_price: i.unit_price,
+        total: i.total,
+      })),
+      deliveryAddress: addr,
+      routedCompanyId: forced,
+      confidence: preselect !== "auto" ? 100 : route.confidence,
+      reason:
+        preselect !== "auto" ? "Manually pre-selected on upload" : route.reason,
+      split,
+    };
+  }
+
+  // Multiple files: scan sequentially with a batch progress counter so the
+  // AI gateway isn't hammered, then hand the whole queue to review.
+  async function handleFiles(fileList: File[]) {
+    const files = fileList.slice(0, 25);
+    if (files.length === 1) {
+      await handleFile(files[0]);
+      return;
+    }
+    setBatch({ done: 0, total: files.length });
+    const drafts: Draft[] = [];
+    let failed = 0;
+    for (let i = 0; i < files.length; i++) {
+      try {
+        drafts.push(await scanOne(files[i]));
+      } catch (e) {
+        console.error(e);
+        failed++;
+      }
+      setBatch({ done: i + 1, total: files.length });
+    }
+    setBatch(null);
+    if (drafts.length === 0) {
+      toast.error("Couldn't read any of those files. Try clearer photos or PDFs.");
+      return;
+    }
+    if (failed > 0) {
+      toast.warning(`${drafts.length} scanned · ${failed} skipped (unreadable)`);
+    } else {
+      toast.success(`${drafts.length} invoices scanned — review each below`);
+    }
+    onBatch(drafts);
+  }
+
   async function handleFile(file: File) {
     try {
       setStage("Uploading");
-      const dataUrl = await toDataUrl(file);
       setStage("Extracting");
-      const parsed = await scan({
-        data: { fileDataUrl: dataUrl, mimeType: file.type, filename: file.name },
-      });
+      const draft = await scanOne(file);
       setStage("Routing");
-      const addr = "";
-      const route = routeInvoice(companies, {
-        deliveryAddress: addr,
-        vendor: parsed.vendor,
-        total: parsed.grand_total,
-        date: parsed.date ? new Date(parsed.date) : new Date(),
-      });
       setStage("Matching");
       await new Promise((r) => setTimeout(r, 300));
       setStage("Analyzing");
       await new Promise((r) => setTimeout(r, 300));
       setStage("Complete");
-      const forced = preselect !== "auto" ? preselect : route.company?.id;
-      onExtracted({
-        vendor: parsed.vendor,
-        date: parsed.date,
-        total: parsed.grand_total,
-        items: parsed.items.map((i) => ({
-          product: i.product,
-          qty: i.qty,
-          unit_price: i.unit_price,
-          total: i.total,
-        })),
-        deliveryAddress: addr,
-        routedCompanyId: forced,
-        confidence: preselect !== "auto" ? 100 : route.confidence,
-        reason:
-          preselect !== "auto"
-            ? "Manually pre-selected on upload"
-            : route.reason,
-        split,
-      });
+      onBatch([draft]);
     } catch (e) {
       console.error(e);
       toast.error("Could not read that file. Try a clearer photo or PDF.");
@@ -290,8 +328,13 @@ function UploadTab({
         ref={fileRef}
         type="file"
         accept="image/*,application/pdf"
+        multiple
         hidden
-        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+        onChange={(e) => {
+          const files = e.target.files;
+          if (files && files.length) handleFiles(Array.from(files));
+          e.target.value = "";
+        }}
       />
       <input
         ref={camRef}
