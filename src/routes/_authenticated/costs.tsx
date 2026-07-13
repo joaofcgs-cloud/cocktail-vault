@@ -526,7 +526,7 @@ function CategoryTab({
                       const hi = sorted[0];
                       const lo = sorted[sorted.length - 1];
                       const pct = ((hi.price - lo.price) / lo.price) * 100;
-                      return `${barShort(barById(hi.price === lo.price ? hi.companyId : hi.companyId))} pays ${num(pct)}% more than ${barShort(barById(lo.companyId))}. Consolidate through Lab?`;
+                      return `${barShort(barById(hi.companyId))} pays ${num(pct)}% more than ${barShort(barById(lo.companyId))}. Consolidate through Lab?`;
                     })()}
                   </p>
                 )}
