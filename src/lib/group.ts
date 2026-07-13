@@ -693,6 +693,111 @@ export function transferPrice(productionCost: number, markupPercent: number): nu
   return Math.round(productionCost * (1 + markupPercent / 100) * 100) / 100;
 }
 
+/* ---------- Company inventory (per-company stock) ---------- */
+export type InvKind = "spirit" | "food" | "prep";
+export type InvStatus = "OUT" | "LOW" | "OK" | "GOOD" | "EXPIRING";
+export interface CompanyInventoryRow {
+  id: string;
+  company_id: string;
+  kind: InvKind;
+  product_id: string | null;
+  prep_recipe_id: string | null;
+  name: string;
+  current_stock: number;
+  par_level: number;
+  unit: string;
+  unit_cost: number;
+  expiry_date: string | null;
+  status: InvStatus;
+  created_at: string;
+  updated_at: string;
+}
+export function useCompanyInventory() {
+  return useQuery({
+    queryKey: ["company_inventory"],
+    queryFn: async (): Promise<CompanyInventoryRow[]> => {
+      const { data, error } = await db
+        .from("company_inventory")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []).map((r: any) => ({
+        ...r,
+        current_stock: Number(r.current_stock),
+        par_level: Number(r.par_level),
+        unit_cost: Number(r.unit_cost),
+      }));
+    },
+  });
+}
+
+export interface VarianceRow {
+  id: string;
+  company_id: string;
+  period_start: string;
+  period_end: string;
+  metric: string;
+  expected: number;
+  actual: number;
+  variance: number;
+  notes: string | null;
+  created_at: string;
+}
+export function useVarianceReports() {
+  return useQuery({
+    queryKey: ["variance_reports"],
+    queryFn: async (): Promise<VarianceRow[]> => {
+      const { data, error } = await db
+        .from("variance_reports")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((r: any) => ({
+        ...r,
+        expected: Number(r.expected),
+        actual: Number(r.actual),
+        variance: Number(r.variance),
+      }));
+    },
+  });
+}
+
+/* Days until a date (null-safe). */
+export function daysUntil(date: string | null): number | null {
+  if (!date) return null;
+  const d = new Date(date);
+  const now = new Date();
+  d.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
+  return Math.round((d.getTime() - now.getTime()) / 86400000);
+}
+
+/* Group "where is what" matrix: one row per product name with per-company totals. */
+export interface GroupStockRow {
+  name: string;
+  kind: InvKind;
+  unit: string;
+  perCompany: Record<string, number>;
+  total: number;
+}
+export function buildGroupStock(
+  rows: CompanyInventoryRow[],
+  companies: Company[],
+): GroupStockRow[] {
+  const map = new Map<string, GroupStockRow>();
+  for (const r of rows) {
+    const key = `${r.kind}:${r.name}`;
+    let g = map.get(key);
+    if (!g) {
+      g = { name: r.name, kind: r.kind, unit: r.unit, perCompany: {}, total: 0 };
+      map.set(key, g);
+    }
+    g.perCompany[r.company_id] = (g.perCompany[r.company_id] ?? 0) + r.current_stock;
+    g.total += r.current_stock;
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export interface BarBalance {
   company: Company;
   owedGross: number;
