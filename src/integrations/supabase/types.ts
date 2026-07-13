@@ -248,6 +248,79 @@ export type Database = {
           },
         ]
       }
+      company_inventory: {
+        Row: {
+          company_id: string
+          created_at: string
+          current_stock: number
+          expiry_date: string | null
+          id: string
+          kind: string
+          name: string
+          par_level: number
+          prep_recipe_id: string | null
+          product_id: string | null
+          status: string
+          unit: string
+          unit_cost: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          current_stock?: number
+          expiry_date?: string | null
+          id?: string
+          kind: string
+          name: string
+          par_level?: number
+          prep_recipe_id?: string | null
+          product_id?: string | null
+          status?: string
+          unit?: string
+          unit_cost?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          current_stock?: number
+          expiry_date?: string | null
+          id?: string
+          kind?: string
+          name?: string
+          par_level?: number
+          prep_recipe_id?: string | null
+          product_id?: string | null
+          status?: string
+          unit?: string
+          unit_cost?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_inventory_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_inventory_prep_recipe_id_fkey"
+            columns: ["prep_recipe_id"]
+            isOneToOne: false
+            referencedRelation: "prep_recipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_inventory_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_relationships: {
         Row: {
           created_at: string
