@@ -9,8 +9,18 @@ import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { eur, num } from "@/lib/format";
-import { Download, Lock, Upload, FileText, Trash2, ExternalLink, Sparkles } from "lucide-react";
+import { Download, Lock, Upload, FileText, Trash2, ExternalLink, Sparkles, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import {
+  useCompanies,
+  companyById,
+  barShort,
+  STAFF_MOVEMENTS,
+  GROUP_LABOUR_MONTHLY,
+  GROUP_LABOUR_PCT_DISPLAY,
+  GROUP_REVENUE_TOTAL,
+  type Company,
+} from "@/lib/group";
 
 export const Route = createFileRoute("/_authenticated/staff")({
   head: () => ({ meta: [{ title: "Staff & Payroll — Bar Command Center" }] }),
@@ -25,13 +35,25 @@ const ROLE_BADGE: Record<string, string> = {
   "Trabalhador de limpeza": "bg-secondary text-muted-foreground",
 };
 
-const TABS = ["Staff List", "Payroll", "Monthly Costs", "Tips", "Salary Invoices"] as const;
+const TABS = ["Group Staff", "By Company", "Payroll", "Monthly Costs", "Tips", "Events"] as const;
 type Tab = (typeof TABS)[number];
+
+const BAR_KEY_COLOR: Record<string, string> = {
+  PR: "var(--teal)",
+  Baixa: "var(--orange)",
+  Lab: "var(--pink)",
+};
+function moveShort(k: "PR" | "Baixa" | "Lab"): string {
+  return k === "PR" ? "Príncipe Real" : k === "Baixa" ? "Baixa" : "Lab";
+}
 
 function StaffPage() {
   const { isOwner, user } = useAuth();
-  const [tab, setTab] = useState<Tab>("Staff List");
+  const [tab, setTab] = useState<Tab>("Group Staff");
   const qc = useQueryClient();
+  const [selCompany, setSelCompany] = useState<string>("");
+
+  const { data: companies = [] } = useCompanies();
 
   const { data: staff = [] } = useQuery({
     queryKey: ["staff"],
@@ -71,6 +93,19 @@ function StaffPage() {
 
   const byId = useMemo(
     () => Object.fromEntries(staff.map((s) => [s.id, s])),
+    [staff],
+  );
+
+  const bars = companies.filter((c) => c.type !== "holding");
+  const selectedCompany =
+    companies.find((c) => c.id === selCompany) ?? bars[0];
+
+  const companyStaff = useMemo(
+    () => staff.filter((s) => s.company_id === selectedCompany?.id),
+    [staff, selectedCompany],
+  );
+  const groupAvgSalary = useMemo(
+    () => (staff.length ? staff.reduce((sum, s) => sum + s.base_salary, 0) / staff.length : 0),
     [staff],
   );
 
@@ -340,37 +375,75 @@ function StaffPage() {
         ))}
       </div>
 
-      {tab === "Staff List" && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {staff.map((s) => (
-            <Card key={s.id} className="border-border bg-card p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate font-bold">{s.name}</p>
-                  <p className="text-xs text-muted-foreground">NIF {s.nif}</p>
-                </div>
-                <span
-                  className={`h-2 w-2 shrink-0 rounded-full ${s.active ? "bg-green" : "bg-muted-foreground"}`}
-                  title={s.active ? "Active" : "Inactive"}
+      {tab === "Group Staff" && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <MiniKpi label="Total headcount" value={String(staff.length)} tone="var(--teal)" />
+            <MiniKpi label="Group labour / mo" value={eur(GROUP_LABOUR_MONTHLY)} tone="var(--orange)" />
+            <MiniKpi label="% of group revenue" value={`${num(GROUP_LABOUR_PCT_DISPLAY)}%`} tone="var(--pink)" />
+            <MiniKpi label="Group revenue / mo" value={eur(GROUP_REVENUE_TOTAL)} tone="var(--foreground)" />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {staff.map((s) => (
+              <StaffCard key={s.id} s={s} company={companyById(companies, s.company_id)} />
+            ))}
+            {staff.length === 0 && (
+              <Card className="border-border bg-card p-6 text-center text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">
+                No staff yet.
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === "By Company" && (
+        <div className="space-y-4">
+          <select
+            value={selectedCompany?.id ?? ""}
+            onChange={(e) => setSelCompany(e.target.value)}
+            className="h-11 rounded-lg border border-border bg-background px-3 text-sm"
+          >
+            {bars.map((c) => (
+              <option key={c.id} value={c.id}>
+                {barShort(c)}
+              </option>
+            ))}
+          </select>
+
+          {(() => {
+            const count = companyStaff.length;
+            const totalBase = companyStaff.reduce((sum, s) => sum + s.base_salary, 0);
+            const avg = count ? totalBase / count : 0;
+            const coRevenue =
+              barShort(selectedCompany).includes("Príncipe") ? 18000
+                : barShort(selectedCompany).includes("Baixa") ? 15000 : 12000;
+            const labourPct = coRevenue ? (totalBase / coRevenue) * 100 : 0;
+            const diff = avg - groupAvgSalary;
+            return (
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <MiniKpi label="Headcount" value={String(count)} tone="var(--teal)" />
+                <MiniKpi label="Labour cost" value={eur(totalBase)} tone="var(--orange)" />
+                <MiniKpi label="Labour cost %" value={`${num(labourPct)}%`} tone={labourPct > 25 ? "var(--red)" : "var(--green)"} />
+                <MiniKpi
+                  label="Avg salary"
+                  value={eur(avg)}
+                  tone="var(--foreground)"
+                  sub={`${diff >= 0 ? "+" : ""}${eur(diff)} vs group avg`}
                 />
               </div>
-              <span
-                className={`mt-3 inline-block rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${ROLE_BADGE[s.role] ?? "bg-secondary text-muted-foreground"}`}
-              >
-                {s.role}
-              </span>
-              <div className="mt-4 flex items-end justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">Base salary</p>
-                  <p className="text-lg font-black text-teal">{eur(s.base_salary)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Hourly</p>
-                  <p className="text-sm font-semibold">{eur(s.hourly_rate)}</p>
-                </div>
-              </div>
-            </Card>
-          ))}
+            );
+          })()}
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {companyStaff.map((s) => (
+              <StaffCard key={s.id} s={s} company={selectedCompany} />
+            ))}
+            {companyStaff.length === 0 && (
+              <Card className="border-border bg-card p-6 text-center text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">
+                No staff assigned to this company.
+              </Card>
+            )}
+          </div>
         </div>
       )}
 
@@ -510,7 +583,7 @@ function StaffPage() {
         </Card>
       )}
 
-      {tab === "Salary Invoices" && (
+      {tab === "Payroll" && (
         <div className="space-y-4">
           <Card className="border-border bg-card p-4 md:p-5">
             <h2 className="mb-1 text-sm font-bold uppercase tracking-wide">
@@ -611,11 +684,44 @@ function StaffPage() {
           </Card>
         </div>
       )}
+
+      {tab === "Events" && (
+        <div className="space-y-4">
+          <Card className="border-border bg-card p-4 md:p-5">
+            <h2 className="mb-1 text-sm font-bold uppercase tracking-wide">
+              Inter-Company Staff Movements
+            </h2>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Staff can work across bars. Hours are attributed to the host company for payroll.
+            </p>
+            <ul className="space-y-2">
+              {STAFF_MOVEMENTS.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background p-3"
+                >
+                  <span className="text-xs text-muted-foreground">{m.date}</span>
+                  <span className="font-semibold">{m.staff}</span>
+                  <span className="flex items-center gap-1.5 text-sm">
+                    <span style={{ color: BAR_KEY_COLOR[m.from] }}>{moveShort(m.from)}</span>
+                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span style={{ color: BAR_KEY_COLOR[m.to] }}>{moveShort(m.to)}</span>
+                  </span>
+                  <span className="ml-auto rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold">
+                    {m.hours}h
+                  </span>
+                  <p className="w-full text-xs text-muted-foreground">{m.reason}</p>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
 
-function MiniKpi({ label, value, tone }: { label: string; value: string; tone: string }) {
+function MiniKpi({ label, value, tone, sub }: { label: string; value: string; tone: string; sub?: string }) {
   return (
     <Card className="border-border bg-card p-4">
       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -624,6 +730,50 @@ function MiniKpi({ label, value, tone }: { label: string; value: string; tone: s
       <p className="mt-2 text-xl font-black" style={{ color: tone }}>
         {value}
       </p>
+      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+    </Card>
+  );
+}
+
+function StaffCard({ s, company }: { s: Staff; company?: Company }) {
+  return (
+    <Card className="border-border bg-card p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-bold">{s.name}</p>
+          <p className="text-xs text-muted-foreground">NIF {s.nif ?? "—"}</p>
+        </div>
+        <span
+          className={`h-2 w-2 shrink-0 rounded-full ${s.active ? "bg-green" : "bg-muted-foreground"}`}
+          title={s.active ? "Active" : "Inactive"}
+        />
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <span
+          className={`inline-block rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${ROLE_BADGE[s.role] ?? "bg-secondary text-muted-foreground"}`}
+        >
+          {s.role}
+        </span>
+        {company && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide"
+            style={{ backgroundColor: `${company.brand_color}22`, color: company.brand_color }}
+          >
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: company.brand_color }} />
+            {barShort(company)}
+          </span>
+        )}
+      </div>
+      <div className="mt-4 flex items-end justify-between">
+        <div>
+          <p className="text-xs text-muted-foreground">Base salary</p>
+          <p className="text-lg font-black text-teal">{eur(s.base_salary)}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-muted-foreground">Hourly</p>
+          <p className="text-sm font-semibold">{eur(s.hourly_rate)}</p>
+        </div>
+      </div>
     </Card>
   );
 }

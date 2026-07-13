@@ -1134,3 +1134,24 @@ export const REVENUE_TREND: TrendPoint[] = [
   { month: "Jun", pr: 17200, baixa: 14500, lab: 11500 },
   { month: "Jul", pr: 18000, baixa: 15000, lab: 12000, event: { label: "Summer terrace peak", detail: "Both bars at record covers; Lab resale up 24% YoY." } },
 ];
+
+/* Group labour headline (all entities). Real payroll sums to ~€11,500/mo. */
+export const GROUP_LABOUR_MONTHLY = 11500;
+export const GROUP_LABOUR_PCT_DISPLAY = 25.5;
+
+/* Inter-company staff movements — staff can work multiple bars. */
+export interface StaffMovement {
+  id: string;
+  date: string;
+  staff: string;
+  from: "PR" | "Baixa" | "Lab";
+  to: "PR" | "Baixa" | "Lab";
+  reason: string;
+  hours: number;
+}
+export const STAFF_MOVEMENTS: StaffMovement[] = [
+  { id: "m1", date: "2026-07-04", staff: "Bruno Carvalho", from: "PR", to: "Baixa", reason: "Covered Friday service — Baixa short-staffed", hours: 8 },
+  { id: "m2", date: "2026-07-06", staff: "Rui Pereira", from: "Baixa", to: "PR", reason: "Private event support at Príncipe Real", hours: 6 },
+  { id: "m3", date: "2026-07-10", staff: "Francisco Dias", from: "Lab", to: "PR", reason: "On-site batch training for bar team", hours: 4 },
+  { id: "m4", date: "2026-07-12", staff: "Sofia Martins", from: "PR", to: "Baixa", reason: "Holiday cover", hours: 8 },
+];
