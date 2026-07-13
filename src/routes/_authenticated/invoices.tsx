@@ -101,7 +101,10 @@ function InvoicesPage() {
   const { data: allocations = [] } = useInvoiceAllocations();
   const { data: events = [] } = useBusinessEvents();
 
-  const [draft, setDraft] = useState<Draft | null>(null);
+  // Queue of AI-extracted drafts awaiting review. Supports batch uploads —
+  // the user reviews/confirms them one at a time; single upload = queue of 1.
+  const [queue, setQueue] = useState<Draft[]>([]);
+  const draft = queue[0] ?? null;
 
   const bars = companies.filter((c) => c.type === "bar" || c.type === "lab");
   const pendingCount = invoices.filter(
@@ -151,23 +154,35 @@ function InvoicesPage() {
         <UploadTab
           companies={companies}
           bars={bars}
-          onExtracted={(d) => {
-            setDraft(d);
+          onBatch={(drafts) => {
+            if (drafts.length === 0) return;
+            setQueue(drafts);
             setTab("review");
           }}
         />
       )}
       {tab === "review" && (
         <ReviewTab
+          key={`${queue.length}-${draft?.vendor ?? "none"}`}
           companies={companies}
           bars={bars}
           draft={draft}
+          queueTotal={queue.length}
           onDone={async () => {
-            setDraft(null);
+            const remaining = queue.slice(1);
+            setQueue(remaining);
             await refetch();
-            setTab("history");
+            if (remaining.length === 0) setTab("history");
           }}
-          onGoUpload={() => setTab("upload")}
+          onSkip={() => {
+            const remaining = queue.slice(1);
+            setQueue(remaining);
+            if (remaining.length === 0) setTab("upload");
+          }}
+          onGoUpload={() => {
+            setQueue([]);
+            setTab("upload");
+          }}
         />
       )}
       {tab === "history" && (
