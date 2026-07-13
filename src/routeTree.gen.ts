@@ -23,6 +23,7 @@ import { Route as AuthenticatedSalesRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedPrepRouteImport } from './routes/_authenticated/prep'
 import { Route as AuthenticatedInvoicesRouteImport } from './routes/_authenticated/invoices'
+import { Route as AuthenticatedInterCompanyRouteImport } from './routes/_authenticated/inter-company'
 import { Route as AuthenticatedCostsRouteImport } from './routes/_authenticated/costs'
 import { Route as AuthenticatedCalculatorsRouteImport } from './routes/_authenticated/calculators'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
@@ -97,6 +98,12 @@ const AuthenticatedInvoicesRoute = AuthenticatedInvoicesRouteImport.update({
   path: '/invoices',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedInterCompanyRoute =
+  AuthenticatedInterCompanyRouteImport.update({
+    id: '/inter-company',
+    path: '/inter-company',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedCostsRoute = AuthenticatedCostsRouteImport.update({
   id: '/costs',
   path: '/costs',
@@ -129,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/calculators': typeof AuthenticatedCalculatorsRoute
   '/costs': typeof AuthenticatedCostsRoute
+  '/inter-company': typeof AuthenticatedInterCompanyRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
   '/prep': typeof AuthenticatedPrepRoute
   '/profile': typeof AuthenticatedProfileRoute
@@ -147,6 +155,7 @@ export interface FileRoutesByTo {
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/calculators': typeof AuthenticatedCalculatorsRoute
   '/costs': typeof AuthenticatedCostsRoute
+  '/inter-company': typeof AuthenticatedInterCompanyRoute
   '/invoices': typeof AuthenticatedInvoicesRoute
   '/prep': typeof AuthenticatedPrepRoute
   '/profile': typeof AuthenticatedProfileRoute
@@ -168,6 +177,7 @@ export interface FileRoutesById {
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/calculators': typeof AuthenticatedCalculatorsRoute
   '/_authenticated/costs': typeof AuthenticatedCostsRoute
+  '/_authenticated/inter-company': typeof AuthenticatedInterCompanyRoute
   '/_authenticated/invoices': typeof AuthenticatedInvoicesRoute
   '/_authenticated/prep': typeof AuthenticatedPrepRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
@@ -190,6 +200,7 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/calculators'
     | '/costs'
+    | '/inter-company'
     | '/invoices'
     | '/prep'
     | '/profile'
@@ -208,6 +219,7 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/calculators'
     | '/costs'
+    | '/inter-company'
     | '/invoices'
     | '/prep'
     | '/profile'
@@ -228,6 +240,7 @@ export interface FileRouteTypes {
     | '/_authenticated/analytics'
     | '/_authenticated/calculators'
     | '/_authenticated/costs'
+    | '/_authenticated/inter-company'
     | '/_authenticated/invoices'
     | '/_authenticated/prep'
     | '/_authenticated/profile'
@@ -347,6 +360,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInvoicesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/inter-company': {
+      id: '/_authenticated/inter-company'
+      path: '/inter-company'
+      fullPath: '/inter-company'
+      preLoaderRoute: typeof AuthenticatedInterCompanyRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/costs': {
       id: '/_authenticated/costs'
       path: '/costs'
@@ -383,6 +403,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedCalculatorsRoute: typeof AuthenticatedCalculatorsRoute
   AuthenticatedCostsRoute: typeof AuthenticatedCostsRoute
+  AuthenticatedInterCompanyRoute: typeof AuthenticatedInterCompanyRoute
   AuthenticatedInvoicesRoute: typeof AuthenticatedInvoicesRoute
   AuthenticatedPrepRoute: typeof AuthenticatedPrepRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
@@ -399,6 +420,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedCalculatorsRoute: AuthenticatedCalculatorsRoute,
   AuthenticatedCostsRoute: AuthenticatedCostsRoute,
+  AuthenticatedInterCompanyRoute: AuthenticatedInterCompanyRoute,
   AuthenticatedInvoicesRoute: AuthenticatedInvoicesRoute,
   AuthenticatedPrepRoute: AuthenticatedPrepRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,

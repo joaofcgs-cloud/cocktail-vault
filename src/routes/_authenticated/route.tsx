@@ -27,7 +27,7 @@ import {
   Wallet,
   TrendingUp,
 } from "lucide-react";
-import { Calculator, BarChart3, User, Shield, FlaskConical } from "lucide-react";
+import { Calculator, BarChart3, User, Shield, FlaskConical, ArrowLeftRight } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -52,6 +52,7 @@ const NAV = [
   { to: "/prep", label: "Prep Lab", icon: FlaskConical, exact: false, ownerOnly: false },
   { to: "/sales", label: "Sales", icon: TrendingUp, exact: false, ownerOnly: false },
   { to: "/invoices", label: "Invoices", icon: ReceiptText, exact: false, ownerOnly: false },
+  { to: "/inter-company", label: "Inter-Co", icon: ArrowLeftRight, exact: false, ownerOnly: false },
   { to: "/calculators", label: "Calc", icon: Calculator, exact: false, ownerOnly: false },
   { to: "/analytics", label: "Charts", icon: BarChart3, exact: false, ownerOnly: true },
   { to: "/variance", label: "Variance", icon: Scale, exact: false, ownerOnly: true },
