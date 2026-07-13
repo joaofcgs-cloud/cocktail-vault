@@ -28,6 +28,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Calculator, BarChart3, User, Shield, FlaskConical, ArrowLeftRight, Layers } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -51,6 +52,7 @@ const NAV = [
   { to: "/stock", label: "Stock", icon: Boxes, exact: false, ownerOnly: false },
   { to: "/inventory", label: "Inventory", icon: Layers, exact: false, ownerOnly: false },
   { to: "/prep", label: "Prep Lab", icon: FlaskConical, exact: false, ownerOnly: false },
+  { to: "/recipes", label: "Recipes", icon: BookOpen, exact: false, ownerOnly: false },
   { to: "/sales", label: "Sales", icon: TrendingUp, exact: false, ownerOnly: false },
   { to: "/invoices", label: "Invoices", icon: ReceiptText, exact: false, ownerOnly: false },
   { to: "/inter-company", label: "Inter-Co", icon: ArrowLeftRight, exact: false, ownerOnly: false },
