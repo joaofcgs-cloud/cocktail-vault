@@ -1,7 +1,7 @@
 {
-  "name": "Imprensa Bar Command Center",
-  "short_name": "Bar Command",
-  "description": "Cocktail bar inventory command center",
+  "name": "Imprensa Group Command Center",
+  "short_name": "Imprensa Group",
+  "description": "Multi-company AI financial command center for the Plataforma Boémia group",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f0f0f",

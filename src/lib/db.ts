@@ -109,7 +109,7 @@ export interface BatchRecipe {
   created_at: string;
 }
 
-export type AppRole = "owner" | "staff";
+export type AppRole = "owner" | "bar_manager" | "lab_manager" | "staff";
 
 export interface Staff {
   id: string;

@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "../lib/auth";
+import { CompanyProvider } from "../lib/company-context";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -80,7 +81,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Imprensa Bar Command Center" },
+      { title: "Imprensa Group Command Center" },
       {
         name: "description",
         content:
@@ -92,8 +93,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "apple-mobile-web-app-status-bar-style",
         content: "black-translucent",
       },
-      { name: "apple-mobile-web-app-title", content: "Bar Command" },
-      { property: "og:title", content: "Imprensa Bar Command Center" },
+      { name: "apple-mobile-web-app-title", content: "Imprensa Group" },
+      { property: "og:title", content: "Imprensa Group Command Center" },
       {
         property: "og:description",
         content:
@@ -101,7 +102,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Imprensa Bar Command Center" },
+      { name: "twitter:title", content: "Imprensa Group Command Center" },
       { name: "twitter:description", content: "Cocktail bar inventory command center — track stock, cocktail margins, invoices and sales variance." },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/3bdebe25-2dca-4fa3-87f6-38edc6633f89/id-preview-caa3b61d--89b82b8c-850a-433b-b55c-b43c7c68afe2.lovable.app-1783463777846.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/3bdebe25-2dca-4fa3-87f6-38edc6633f89/id-preview-caa3b61d--89b82b8c-850a-433b-b55c-b43c7c68afe2.lovable.app-1783463777846.png" },
@@ -169,9 +170,11 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-        <Toaster position="top-center" />
+        <CompanyProvider>
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+          <Toaster position="top-center" />
+        </CompanyProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
