@@ -950,3 +950,84 @@ export function prepEconomics(prep: GroupPrep, markupPercent = DEFAULT_MARKUP_PE
     estimated: seededPerMl === 0,
   };
 }
+
+/* ==================================================================
+   Calculators — company-aware pricing from real company_inventory
+   ================================================================== */
+
+/* Convert a company_inventory row's unit cost to cost per ml. */
+export function invCostPerMl(row: CompanyInventoryRow): number {
+  const u = (row.unit || "").toLowerCase();
+  if (u === "l" || u === "lt" || u === "litre" || u === "liter") return row.unit_cost / 1000;
+  if (u === "cl") return row.unit_cost / 10;
+  if (u === "ml") return row.unit_cost;
+  if (u === "kg") return row.unit_cost / 1000;
+  if (u === "g") return row.unit_cost;
+  return row.unit_cost; // per-unit fallback
+}
+
+/* Map of ingredient name (lowercased) -> cost per ml for one company. */
+export function companyCostMap(
+  rows: CompanyInventoryRow[],
+  companyId: string,
+): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const r of rows) {
+    if (r.company_id !== companyId) continue;
+    m.set(r.name.toLowerCase(), invCostPerMl(r));
+  }
+  return m;
+}
+
+/* Whether a bar buys via Lab resale (Baixa) or direct (Príncipe Real). */
+export function sourcingNote(company?: Company): string {
+  if (!company) return "";
+  if (company.commercial_name.includes("Baixa")) return "Lab resale";
+  if (company.type === "lab") return "Lab production";
+  return "direct";
+}
+
+/* Inter-company sourcing comparison: bar buying direct vs through the Lab.
+   Real ingredient names + realistic direct/resale unit costs. */
+export interface SourcingCompare {
+  ingredient: string;
+  unit: string;
+  directSupplier: string;
+  directCost: number; // what the bar pays buying direct
+  labCost: number; // Lab bulk cost
+  resaleCost: number; // Lab bulk + resale markup to bar
+  saving: number; // directCost - resaleCost
+  savingPct: number;
+}
+export const LAB_RESALE_MARKUP = 15; // %
+export const SOURCING_DATA: {
+  ingredient: string;
+  unit: string;
+  directSupplier: string;
+  directCost: number;
+  labCost: number;
+}[] = [
+  { ingredient: "Lime", unit: "kg", directSupplier: "PURA", directCost: 3.2, labCost: 2.4 },
+  { ingredient: "Lemon", unit: "kg", directSupplier: "PURA", directCost: 2.9, labCost: 2.25 },
+  { ingredient: "Fresh Mint", unit: "kg", directSupplier: "PURA", directCost: 12.5, labCost: 9.8 },
+  { ingredient: "Egg White", unit: "L", directSupplier: "Recheio", directCost: 4.1, labCost: 3.3 },
+  { ingredient: "Tonic Water", unit: "L", directSupplier: "Makro", directCost: 1.35, labCost: 0.55 },
+  { ingredient: "Simple Syrup", unit: "L", directSupplier: "Makro", directCost: 2.4, labCost: 0.9 },
+  { ingredient: "Orange", unit: "kg", directSupplier: "PURA", directCost: 2.1, labCost: 1.6 },
+];
+export function buildSourcingCompare(): SourcingCompare[] {
+  return SOURCING_DATA.map((d) => {
+    const resaleCost = Math.round(d.labCost * (1 + LAB_RESALE_MARKUP / 100) * 100) / 100;
+    const saving = Math.round((d.directCost - resaleCost) * 100) / 100;
+    return {
+      ingredient: d.ingredient,
+      unit: d.unit,
+      directSupplier: d.directSupplier,
+      directCost: d.directCost,
+      labCost: d.labCost,
+      resaleCost,
+      saving,
+      savingPct: d.directCost ? Math.round((saving / d.directCost) * 1000) / 10 : 0,
+    };
+  }).sort((a, b) => b.saving - a.saving);
+}
