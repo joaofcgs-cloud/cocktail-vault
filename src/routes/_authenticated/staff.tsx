@@ -587,7 +587,7 @@ function StaffPage() {
         </Card>
       )}
 
-      {tab === "Salary Invoices" && (
+      {tab === "Payroll" && (
         <div className="space-y-4">
           <Card className="border-border bg-card p-4 md:p-5">
             <h2 className="mb-1 text-sm font-bold uppercase tracking-wide">
@@ -684,6 +684,39 @@ function StaffPage() {
                   No salary invoices uploaded yet.
                 </li>
               )}
+            </ul>
+          </Card>
+        </div>
+      )}
+
+      {tab === "Events" && (
+        <div className="space-y-4">
+          <Card className="border-border bg-card p-4 md:p-5">
+            <h2 className="mb-1 text-sm font-bold uppercase tracking-wide">
+              Inter-Company Staff Movements
+            </h2>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Staff can work across bars. Hours are attributed to the host company for payroll.
+            </p>
+            <ul className="space-y-2">
+              {STAFF_MOVEMENTS.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background p-3"
+                >
+                  <span className="text-xs text-muted-foreground">{m.date}</span>
+                  <span className="font-semibold">{m.staff}</span>
+                  <span className="flex items-center gap-1.5 text-sm">
+                    <span style={{ color: BAR_KEY_COLOR[m.from] }}>{moveShort(m.from)}</span>
+                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span style={{ color: BAR_KEY_COLOR[m.to] }}>{moveShort(m.to)}</span>
+                  </span>
+                  <span className="ml-auto rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold">
+                    {m.hours}h
+                  </span>
+                  <p className="w-full text-xs text-muted-foreground">{m.reason}</p>
+                </li>
+              ))}
             </ul>
           </Card>
         </div>
