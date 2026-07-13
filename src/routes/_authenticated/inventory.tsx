@@ -597,11 +597,11 @@ function PriceHistoryTab({ companies }: { companies: Company[] }) {
 
   // group latest by product
   const byProduct = useMemo(() => {
-    const map = new Map<string, { name: string; perCompany: Record<string, number> }>();
+    const map = new Map<string, { id: string; name: string; perCompany: Record<string, number> }>();
     for (const l of latest) {
       let g = map.get(l.productId);
       if (!g) {
-        g = { name: productName(l.productId), perCompany: {} };
+        g = { id: l.productId, name: productName(l.productId), perCompany: {} };
         map.set(l.productId, g);
       }
       g.perCompany[l.companyId] = l.price;
@@ -630,7 +630,7 @@ function PriceHistoryTab({ companies }: { companies: Company[] }) {
             </thead>
             <tbody>
               {byProduct.map((g) => (
-                <tr key={g.name} className="border-b border-border/50 last:border-0">
+                <tr key={g.id} className="border-b border-border/50 last:border-0">
                   <td className="p-3 font-semibold">{g.name}</td>
                   {cols.map((c) => {
                     const v = g.perCompany[c.id];
