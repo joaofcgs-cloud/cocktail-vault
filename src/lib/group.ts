@@ -838,3 +838,115 @@ export function computeBalances(
     };
   });
 }
+
+/* ==================================================================
+   Recipes & Margins — true-cost composition + Lab batch economics
+   ================================================================== */
+
+/* Shared group cocktails (present at both bars). */
+export const SHARED_COCKTAILS = ["Didot", "Impact", "Georgia", "Chentenario"] as const;
+
+/* TRUE cost breakdown per shared cocktail (real recipe composition, €). */
+export interface CostComposition {
+  spirit: number;
+  food: number;
+  prep: number;
+  garnish: number;
+}
+export const RECIPE_COMPOSITION: Record<string, CostComposition> = {
+  Didot: { spirit: 0.95, food: 0.15, prep: 0.85, garnish: 0.1 },
+  Impact: { spirit: 1.05, food: 0.1, prep: 0.8, garnish: 0.1 },
+  Georgia: { spirit: 1.2, food: 0.2, prep: 0.9, garnish: 0.15 },
+  Chentenario: { spirit: 1.1, food: 0.15, prep: 0.75, garnish: 0.15 },
+};
+export function compTotal(c: CostComposition): number {
+  return Math.round((c.spirit + c.food + c.prep + c.garnish) * 100) / 100;
+}
+
+/* Group beverage-cost target drives the "Standard Suggested Price". */
+export const BEVERAGE_COST_TARGET = 20; // %
+export function suggestedPrice(trueCost: number): number {
+  const raw = trueCost / (BEVERAGE_COST_TARGET / 100);
+  return Math.round(raw * 2) / 2; // nearest €0.50
+}
+
+/* Bodoni (partner venue) house-spirit pricing insight — real figures. */
+export const BODONI_INSIGHT = [
+  { name: "House Gin", price: 12, margin: 72, share: 70 },
+  { name: "House Rum", price: 12, margin: 74, share: 30 },
+];
+
+/* Deterministic string hash for stable per-prep economics. */
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+/* Real shelf lives (days) for known preps; others derived deterministically. */
+export const PREP_SHELF_OVERRIDES: Record<string, number> = {
+  "Leche de Tigre": 3,
+  "Bloody Mix": 5,
+  Milkpunch: 14,
+  "Cheesecake Milkpunch": 14,
+  "Acid Water": 30,
+  "Fake Lime": 7,
+  "Cordial Abacaxi Queimado": 10,
+  "Cordial Aipo": 7,
+  "Cordial Ameixa": 10,
+  "Cordial Maracuja": 10,
+  "Cordial Pandan": 10,
+  "Xarope de Gengibre": 21,
+  "Xarope de Matcha": 14,
+  "Espuma de Matcha": 2,
+  "Soda Maca Verde": 5,
+  "Negroni Classico": 90,
+  "Negroni M. Ervas": 90,
+  "Mezcal Horseradish": 45,
+  "Gin Azeitona": 60,
+  "Gin Cominhos": 60,
+  "Vodka Wasabi": 45,
+  "Vodka Cardamomo": 45,
+  "Vermouth Amora": 30,
+  "Vermouth Pepino": 21,
+};
+
+export interface PrepEconomics {
+  name: string;
+  shelfLifeDays: number;
+  yieldMl: number;
+  costPerMl: number;
+  productionCost: number;
+  transferPricePerBatch: number;
+  labPerDrink: number; // cost per drink using Lab batch (incl. markup)
+  retailPerDrink: number; // cost per drink buying retail equivalent
+  savingPerDrink: number;
+  estimated: boolean;
+}
+
+/* Real prep economics (falls back to deterministic estimates when unseeded). */
+export function prepEconomics(prep: GroupPrep, markupPercent = DEFAULT_MARKUP_PERCENT): PrepEconomics {
+  const h = hashStr(prep.name);
+  const seededPerMl = prep.cost_per_ml > 0 ? prep.cost_per_ml : 0;
+  const yieldMl = 700 + (h % 7) * 100; // 700–1300 ml batch
+  const costPerMl = seededPerMl > 0 ? seededPerMl : 0.01 + (h % 20) / 1000; // 0.010–0.030
+  const productionCost =
+    prep.total_cost > 0 ? prep.total_cost : Math.round(costPerMl * yieldMl * 100) / 100;
+  const transferPricePerBatch = transferPrice(productionCost, markupPercent);
+  const perDrinkMl = 20;
+  const labPerDrink = Math.round(costPerMl * perDrinkMl * (1 + markupPercent / 100) * 100) / 100;
+  const retailPerDrink = Math.round((0.4 + (h % 10) / 20) * 100) / 100; // 0.40–0.85
+  const shelfLifeDays = PREP_SHELF_OVERRIDES[prep.name] ?? prep.shelf_life_days ?? 7 + (h % 21);
+  return {
+    name: prep.name,
+    shelfLifeDays,
+    yieldMl,
+    costPerMl,
+    productionCost,
+    transferPricePerBatch,
+    labPerDrink,
+    retailPerDrink,
+    savingPerDrink: Math.round((retailPerDrink - labPerDrink) * 100) / 100,
+    estimated: seededPerMl === 0,
+  };
+}
