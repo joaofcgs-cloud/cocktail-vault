@@ -32,6 +32,7 @@ import { BookOpen } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationBell } from "@/components/NotificationBell";
+import { CompanySelector } from "@/components/CompanySelector";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -133,11 +134,14 @@ function Shell() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-black leading-tight">
-              Imprensa Bar
+              Imprensa Group
             </p>
             <p className="text-xs text-muted-foreground">Command Center</p>
           </div>
           <NotificationBell />
+        </div>
+        <div className="mb-4">
+          <CompanySelector className="w-full" />
         </div>
         <nav className="flex flex-1 flex-col gap-1">
           {nav.map((item) => {
@@ -175,12 +179,7 @@ function Shell() {
 
       {/* Mobile top bar */}
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur md:hidden">
-        <div className="flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-teal/15 text-teal">
-            <Martini className="h-4 w-4" />
-          </div>
-          <span className="text-sm font-black">Bar Command</span>
-        </div>
+        <CompanySelector />
         <div className="flex items-center gap-1">
           <NotificationBell />
           <AccountMenu side="bottom" />
