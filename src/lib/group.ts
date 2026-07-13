@@ -732,7 +732,3 @@ export function computeBalances(
     };
   });
 }
-
-export function eur(n: number): string {
-  return new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(n || 0);
-}
