@@ -573,6 +573,17 @@ function ReviewTab({
 
   return (
     <div className="space-y-4">
+      {queueTotal > 1 && (
+        <div className="flex items-center justify-between rounded-lg border border-teal/30 bg-teal/5 px-3 py-2">
+          <p className="text-xs font-medium text-teal">
+            Batch review · {queueTotal} invoice{queueTotal === 1 ? "" : "s"} left to
+            confirm
+          </p>
+          <span className="text-[10px] text-muted-foreground">
+            Save or skip to move to the next
+          </span>
+        </div>
+      )}
       <Card className="p-4">
         <div className="mb-3 flex items-center justify-between">
           <div>
@@ -652,8 +663,13 @@ function ReviewTab({
           {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
           {splitMode ? "Save split invoice" : "Confirm & route"}
         </Button>
+        {queueTotal > 1 && (
+          <Button variant="outline" onClick={onSkip} disabled={saving}>
+            Skip
+          </Button>
+        )}
         <Button variant="outline" onClick={onGoUpload}>
-          Cancel
+          {queueTotal > 1 ? "Cancel all" : "Cancel"}
         </Button>
       </div>
     </div>
