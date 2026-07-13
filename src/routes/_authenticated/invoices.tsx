@@ -101,7 +101,10 @@ function InvoicesPage() {
   const { data: allocations = [] } = useInvoiceAllocations();
   const { data: events = [] } = useBusinessEvents();
 
-  const [draft, setDraft] = useState<Draft | null>(null);
+  // Queue of AI-extracted drafts awaiting review. Supports batch uploads —
+  // the user reviews/confirms them one at a time; single upload = queue of 1.
+  const [queue, setQueue] = useState<Draft[]>([]);
+  const draft = queue[0] ?? null;
 
   const bars = companies.filter((c) => c.type === "bar" || c.type === "lab");
   const pendingCount = invoices.filter(
@@ -151,23 +154,35 @@ function InvoicesPage() {
         <UploadTab
           companies={companies}
           bars={bars}
-          onExtracted={(d) => {
-            setDraft(d);
+          onBatch={(drafts) => {
+            if (drafts.length === 0) return;
+            setQueue(drafts);
             setTab("review");
           }}
         />
       )}
       {tab === "review" && (
         <ReviewTab
+          key={`${queue.length}-${draft?.vendor ?? "none"}`}
           companies={companies}
           bars={bars}
           draft={draft}
+          queueTotal={queue.length}
           onDone={async () => {
-            setDraft(null);
+            const remaining = queue.slice(1);
+            setQueue(remaining);
             await refetch();
-            setTab("history");
+            if (remaining.length === 0) setTab("history");
           }}
-          onGoUpload={() => setTab("upload")}
+          onSkip={() => {
+            const remaining = queue.slice(1);
+            setQueue(remaining);
+            if (remaining.length === 0) setTab("upload");
+          }}
+          onGoUpload={() => {
+            setQueue([]);
+            setTab("upload");
+          }}
         />
       )}
       {tab === "history" && (
@@ -207,61 +222,99 @@ function CompanyBadge({ company }: { company?: Company }) {
 function UploadTab({
   companies,
   bars,
-  onExtracted,
+  onBatch,
 }: {
   companies: Company[];
   bars: Company[];
-  onExtracted: (d: Draft) => void;
+  onBatch: (drafts: Draft[]) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const scan = useServerFn(scanReceipt);
   const [stage, setStage] = useState<UploadStage | null>(null);
+  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
   const [preselect, setPreselect] = useState<string>("auto");
   const [split, setSplit] = useState(false);
   const [dragging, setDragging] = useState(false);
 
+  // Scan a single file into a Draft (no UI staging). Throws on failure.
+  async function scanOne(file: File): Promise<Draft> {
+    const dataUrl = await toDataUrl(file);
+    const parsed = await scan({
+      data: { fileDataUrl: dataUrl, mimeType: file.type, filename: file.name },
+    });
+    const addr = "";
+    const route = routeInvoice(companies, {
+      deliveryAddress: addr,
+      vendor: parsed.vendor,
+      total: parsed.grand_total,
+      date: parsed.date ? new Date(parsed.date) : new Date(),
+    });
+    const forced = preselect !== "auto" ? preselect : route.company?.id;
+    return {
+      vendor: parsed.vendor,
+      date: parsed.date,
+      total: parsed.grand_total,
+      items: parsed.items.map((i) => ({
+        product: i.product,
+        qty: i.qty,
+        unit_price: i.unit_price,
+        total: i.total,
+      })),
+      deliveryAddress: addr,
+      routedCompanyId: forced,
+      confidence: preselect !== "auto" ? 100 : route.confidence,
+      reason:
+        preselect !== "auto" ? "Manually pre-selected on upload" : route.reason,
+      split,
+    };
+  }
+
+  // Multiple files: scan sequentially with a batch progress counter so the
+  // AI gateway isn't hammered, then hand the whole queue to review.
+  async function handleFiles(fileList: File[]) {
+    const files = fileList.slice(0, 25);
+    if (files.length === 1) {
+      await handleFile(files[0]);
+      return;
+    }
+    setBatch({ done: 0, total: files.length });
+    const drafts: Draft[] = [];
+    let failed = 0;
+    for (let i = 0; i < files.length; i++) {
+      try {
+        drafts.push(await scanOne(files[i]));
+      } catch (e) {
+        console.error(e);
+        failed++;
+      }
+      setBatch({ done: i + 1, total: files.length });
+    }
+    setBatch(null);
+    if (drafts.length === 0) {
+      toast.error("Couldn't read any of those files. Try clearer photos or PDFs.");
+      return;
+    }
+    if (failed > 0) {
+      toast.warning(`${drafts.length} scanned · ${failed} skipped (unreadable)`);
+    } else {
+      toast.success(`${drafts.length} invoices scanned — review each below`);
+    }
+    onBatch(drafts);
+  }
+
   async function handleFile(file: File) {
     try {
       setStage("Uploading");
-      const dataUrl = await toDataUrl(file);
       setStage("Extracting");
-      const parsed = await scan({
-        data: { fileDataUrl: dataUrl, mimeType: file.type, filename: file.name },
-      });
+      const draft = await scanOne(file);
       setStage("Routing");
-      const addr = "";
-      const route = routeInvoice(companies, {
-        deliveryAddress: addr,
-        vendor: parsed.vendor,
-        total: parsed.grand_total,
-        date: parsed.date ? new Date(parsed.date) : new Date(),
-      });
       setStage("Matching");
       await new Promise((r) => setTimeout(r, 300));
       setStage("Analyzing");
       await new Promise((r) => setTimeout(r, 300));
       setStage("Complete");
-      const forced = preselect !== "auto" ? preselect : route.company?.id;
-      onExtracted({
-        vendor: parsed.vendor,
-        date: parsed.date,
-        total: parsed.grand_total,
-        items: parsed.items.map((i) => ({
-          product: i.product,
-          qty: i.qty,
-          unit_price: i.unit_price,
-          total: i.total,
-        })),
-        deliveryAddress: addr,
-        routedCompanyId: forced,
-        confidence: preselect !== "auto" ? 100 : route.confidence,
-        reason:
-          preselect !== "auto"
-            ? "Manually pre-selected on upload"
-            : route.reason,
-        split,
-      });
+      onBatch([draft]);
     } catch (e) {
       console.error(e);
       toast.error("Could not read that file. Try a clearer photo or PDF.");
@@ -275,8 +328,13 @@ function UploadTab({
         ref={fileRef}
         type="file"
         accept="image/*,application/pdf"
+        multiple
         hidden
-        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+        onChange={(e) => {
+          const files = e.target.files;
+          if (files && files.length) handleFiles(Array.from(files));
+          e.target.value = "";
+        }}
       />
       <input
         ref={camRef}
@@ -315,7 +373,9 @@ function UploadTab({
           </div>
         </div>
 
-        {stage ? (
+        {batch ? (
+          <BatchProgress done={batch.done} total={batch.total} />
+        ) : stage ? (
           <UploadProgress stage={stage} />
         ) : (
           <div
@@ -327,21 +387,22 @@ function UploadTab({
             onDrop={(e) => {
               e.preventDefault();
               setDragging(false);
-              const f = e.dataTransfer.files?.[0];
-              if (f) handleFile(f);
+              const fs = e.dataTransfer.files;
+              if (fs && fs.length) handleFiles(Array.from(fs));
             }}
             className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
               dragging ? "border-teal bg-teal/5" : "border-border"
             }`}
           >
             <ImageUp className="mb-2 h-8 w-8 text-muted-foreground" />
-            <p className="text-sm text-foreground">Drop an invoice photo or PDF</p>
+            <p className="text-sm text-foreground">Drop invoice photos or PDFs</p>
             <p className="mb-4 text-xs text-muted-foreground">
-              Vendor, date &amp; prices are always AI-extracted — never typed.
+              Select up to 25 at once — vendor, date &amp; prices are always
+              AI-extracted, never typed.
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
-                <ImageUp className="mr-1 h-4 w-4" /> Gallery / File
+                <ImageUp className="mr-1 h-4 w-4" /> Gallery / Files
               </Button>
               <Button size="sm" variant="outline" onClick={() => camRef.current?.click()}>
                 <Camera className="mr-1 h-4 w-4" /> Camera
@@ -350,6 +411,27 @@ function UploadTab({
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+function BatchProgress({ done, total }: { done: number; total: number }) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  return (
+    <div className="space-y-3 py-6 text-center">
+      <Loader2 className="mx-auto h-8 w-8 animate-spin text-teal" />
+      <p className="text-sm font-medium text-foreground">
+        Scanning invoice {Math.min(done + 1, total)} of {total}…
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {done} of {total} extracted · AI reading vendor, date &amp; prices
+      </p>
+      <div className="mx-auto h-2 w-full max-w-xs overflow-hidden rounded-full bg-border">
+        <div
+          className="h-full rounded-full bg-teal transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }
@@ -385,13 +467,17 @@ function ReviewTab({
   companies,
   bars,
   draft,
+  queueTotal,
   onDone,
+  onSkip,
   onGoUpload,
 }: {
   companies: Company[];
   bars: Company[];
   draft: Draft | null;
+  queueTotal: number;
   onDone: () => void;
+  onSkip: () => void;
   onGoUpload: () => void;
 }) {
   const [routedId, setRoutedId] = useState<string | undefined>(draft?.routedCompanyId);
@@ -487,6 +573,17 @@ function ReviewTab({
 
   return (
     <div className="space-y-4">
+      {queueTotal > 1 && (
+        <div className="flex items-center justify-between rounded-lg border border-teal/30 bg-teal/5 px-3 py-2">
+          <p className="text-xs font-medium text-teal">
+            Batch review · {queueTotal} invoice{queueTotal === 1 ? "" : "s"} left to
+            confirm
+          </p>
+          <span className="text-[10px] text-muted-foreground">
+            Save or skip to move to the next
+          </span>
+        </div>
+      )}
       <Card className="p-4">
         <div className="mb-3 flex items-center justify-between">
           <div>
@@ -566,8 +663,13 @@ function ReviewTab({
           {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
           {splitMode ? "Save split invoice" : "Confirm & route"}
         </Button>
+        {queueTotal > 1 && (
+          <Button variant="outline" onClick={onSkip} disabled={saving}>
+            Skip
+          </Button>
+        )}
         <Button variant="outline" onClick={onGoUpload}>
-          Cancel
+          {queueTotal > 1 ? "Cancel all" : "Cancel"}
         </Button>
       </div>
     </div>
