@@ -27,7 +27,7 @@ import {
   Wallet,
   TrendingUp,
 } from "lucide-react";
-import { Calculator, BarChart3, User, Shield, FlaskConical, ArrowLeftRight, Layers } from "lucide-react";
+import { Calculator, BarChart3, User, Shield, FlaskConical, ArrowLeftRight, Layers, Landmark } from "lucide-react";
 import { BookOpen } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -61,6 +61,7 @@ const NAV = [
   { to: "/variance", label: "Variance", icon: Scale, exact: false, ownerOnly: true },
   { to: "/staff", label: "Staff", icon: Users, exact: false, ownerOnly: true },
   { to: "/costs", label: "Costs", icon: Wallet, exact: false, ownerOnly: true },
+  { to: "/service-costs", label: "Fixed Costs", icon: Landmark, exact: false, ownerOnly: true },
 ] as const;
 
 function Shell() {
