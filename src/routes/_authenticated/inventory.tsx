@@ -604,7 +604,7 @@ function PriceHistoryTab({ companies }: { companies: Company[] }) {
         g = { name: productName(l.productId), perCompany: {} };
         map.set(l.productId, g);
       }
-      g.perCompany[l.companyId] = l.unitCost;
+      g.perCompany[l.companyId] = l.price;
     }
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
     // eslint-disable-next-line react-hooks/exhaustive-deps
