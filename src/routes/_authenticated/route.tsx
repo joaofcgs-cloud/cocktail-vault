@@ -28,6 +28,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Calculator, BarChart3, User, Shield, FlaskConical } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationBell } from "@/components/NotificationBell";
 
