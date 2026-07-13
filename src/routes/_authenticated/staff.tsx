@@ -53,8 +53,11 @@ function moveShort(k: "PR" | "Baixa" | "Lab"): string {
 
 function StaffPage() {
   const { isOwner, user } = useAuth();
-  const [tab, setTab] = useState<Tab>("Staff List");
+  const [tab, setTab] = useState<Tab>("Group Staff");
   const qc = useQueryClient();
+  const [selCompany, setSelCompany] = useState<string>("");
+
+  const { data: companies = [] } = useCompanies();
 
   const { data: staff = [] } = useQuery({
     queryKey: ["staff"],
