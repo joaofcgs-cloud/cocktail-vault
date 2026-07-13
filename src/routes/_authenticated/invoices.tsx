@@ -467,13 +467,17 @@ function ReviewTab({
   companies,
   bars,
   draft,
+  queueTotal,
   onDone,
+  onSkip,
   onGoUpload,
 }: {
   companies: Company[];
   bars: Company[];
   draft: Draft | null;
+  queueTotal: number;
   onDone: () => void;
+  onSkip: () => void;
   onGoUpload: () => void;
 }) {
   const [routedId, setRoutedId] = useState<string | undefined>(draft?.routedCompanyId);
