@@ -373,7 +373,9 @@ function UploadTab({
           </div>
         </div>
 
-        {stage ? (
+        {batch ? (
+          <BatchProgress done={batch.done} total={batch.total} />
+        ) : stage ? (
           <UploadProgress stage={stage} />
         ) : (
           <div
@@ -385,21 +387,22 @@ function UploadTab({
             onDrop={(e) => {
               e.preventDefault();
               setDragging(false);
-              const f = e.dataTransfer.files?.[0];
-              if (f) handleFile(f);
+              const fs = e.dataTransfer.files;
+              if (fs && fs.length) handleFiles(Array.from(fs));
             }}
             className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
               dragging ? "border-teal bg-teal/5" : "border-border"
             }`}
           >
             <ImageUp className="mb-2 h-8 w-8 text-muted-foreground" />
-            <p className="text-sm text-foreground">Drop an invoice photo or PDF</p>
+            <p className="text-sm text-foreground">Drop invoice photos or PDFs</p>
             <p className="mb-4 text-xs text-muted-foreground">
-              Vendor, date &amp; prices are always AI-extracted — never typed.
+              Select up to 25 at once — vendor, date &amp; prices are always
+              AI-extracted, never typed.
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
-                <ImageUp className="mr-1 h-4 w-4" /> Gallery / File
+                <ImageUp className="mr-1 h-4 w-4" /> Gallery / Files
               </Button>
               <Button size="sm" variant="outline" onClick={() => camRef.current?.click()}>
                 <Camera className="mr-1 h-4 w-4" /> Camera
@@ -408,6 +411,27 @@ function UploadTab({
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+function BatchProgress({ done, total }: { done: number; total: number }) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  return (
+    <div className="space-y-3 py-6 text-center">
+      <Loader2 className="mx-auto h-8 w-8 animate-spin text-teal" />
+      <p className="text-sm font-medium text-foreground">
+        Scanning invoice {Math.min(done + 1, total)} of {total}…
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {done} of {total} extracted · AI reading vendor, date &amp; prices
+      </p>
+      <div className="mx-auto h-2 w-full max-w-xs overflow-hidden rounded-full bg-border">
+        <div
+          className="h-full rounded-full bg-teal transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }
