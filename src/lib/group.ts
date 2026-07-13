@@ -554,3 +554,185 @@ export type UploadStage = (typeof UPLOAD_STAGES)[number];
 export function companyById(companies: Company[], id?: string | null) {
   return companies.find((c) => c.id === id);
 }
+
+/* ==================================================================
+   Inter-company (Lab <-> Bar transfers, resale, cost allocation)
+   ================================================================== */
+
+/* When a prep recipe has no seeded ingredient cost yet, use a group-standard
+   estimated per-ml production cost so transfer prices are meaningful (labelled "est."). */
+export const ASSUMED_PREP_COST_PER_ML = 0.018;
+export const DEFAULT_MARKUP_PERCENT = 30;
+export const OVERDUE_DAYS = 30;
+
+export interface CompanyRelationship {
+  id: string;
+  from_company_id: string;
+  to_company_id: string;
+  markup_percent: number;
+}
+export interface Transfer {
+  id: string;
+  from_company_id: string;
+  kind: "batch" | "resale";
+  prep_recipe_id: string | null;
+  product_id: string | null;
+  item_name: string;
+  yield_amount: number;
+  yield_unit: string;
+  production_cost: number;
+  markup_percent: number;
+  transfer_price: number;
+  delivery_date: string | null;
+  status: "active" | "delivered";
+  delivered_at: string | null;
+  created_at: string;
+}
+export interface TransferAllocation {
+  id: string;
+  transfer_id: string;
+  to_company_id: string;
+  quantity: number;
+  amount: number;
+  created_at: string;
+}
+export interface InterCompanyPayment {
+  id: string;
+  from_company_id: string;
+  to_company_id: string;
+  amount: number;
+  payment_date: string;
+  note: string | null;
+  created_at: string;
+}
+export interface CostAllocation {
+  id: string;
+  service_cost_id: string | null;
+  from_company_id: string;
+  label: string;
+  total_amount: number;
+  period_month: number | null;
+  period_year: number | null;
+  splits: { company_id: string; percent: number; amount: number }[];
+  applied: boolean;
+  created_at: string;
+}
+
+export function useCompanyRelationships() {
+  return useQuery({
+    queryKey: ["company_relationships"],
+    queryFn: async (): Promise<CompanyRelationship[]> => {
+      const { data, error } = await db.from("company_relationships").select("*");
+      if (error) throw error;
+      return data as CompanyRelationship[];
+    },
+  });
+}
+export function useTransfers() {
+  return useQuery({
+    queryKey: ["inter_company_transfers"],
+    queryFn: async (): Promise<Transfer[]> => {
+      const { data, error } = await db
+        .from("inter_company_transfers")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as Transfer[];
+    },
+  });
+}
+export function useTransferAllocations() {
+  return useQuery({
+    queryKey: ["transfer_allocations"],
+    queryFn: async (): Promise<TransferAllocation[]> => {
+      const { data, error } = await db.from("transfer_allocations").select("*");
+      if (error) throw error;
+      return data as TransferAllocation[];
+    },
+  });
+}
+export function useInterCompanyPayments() {
+  return useQuery({
+    queryKey: ["inter_company_payments"],
+    queryFn: async (): Promise<InterCompanyPayment[]> => {
+      const { data, error } = await db
+        .from("inter_company_payments")
+        .select("*")
+        .order("payment_date", { ascending: false });
+      if (error) throw error;
+      return data as InterCompanyPayment[];
+    },
+  });
+}
+export function useCostAllocations() {
+  return useQuery({
+    queryKey: ["cost_allocations"],
+    queryFn: async (): Promise<CostAllocation[]> => {
+      const { data, error } = await db
+        .from("cost_allocations")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data as CostAllocation[]).map((r) => ({
+        ...r,
+        splits: Array.isArray(r.splits) ? r.splits : [],
+      }));
+    },
+  });
+}
+
+/* Production cost from a prep recipe + yield (falls back to estimate). */
+export function prepProductionCost(prep: GroupPrep | undefined, yieldMl: number): { cost: number; estimated: boolean } {
+  if (!prep) return { cost: 0, estimated: false };
+  if (prep.cost_per_ml > 0) return { cost: prep.cost_per_ml * yieldMl, estimated: false };
+  if (prep.total_cost > 0) return { cost: prep.total_cost, estimated: false };
+  return { cost: ASSUMED_PREP_COST_PER_ML * yieldMl, estimated: true };
+}
+export function transferPrice(productionCost: number, markupPercent: number): number {
+  return Math.round(productionCost * (1 + markupPercent / 100) * 100) / 100;
+}
+
+export interface BarBalance {
+  company: Company;
+  owedGross: number;
+  paid: number;
+  balance: number;
+  lastPayment?: string;
+  overdueDays: number;
+}
+/* Compute what each bar owes the Lab. */
+export function computeBalances(
+  companies: Company[],
+  transfers: Transfer[],
+  allocations: TransferAllocation[],
+  payments: InterCompanyPayment[],
+): BarBalance[] {
+  const bars = companies.filter((c) => c.type === "bar");
+  return bars.map((bar) => {
+    const owedGross = allocations
+      .filter((a) => a.to_company_id === bar.id)
+      .reduce((s, a) => s + Number(a.amount), 0);
+    const barPays = payments.filter((p) => p.from_company_id === bar.id);
+    const paid = barPays.reduce((s, p) => s + Number(p.amount), 0);
+    const lastPayment = barPays
+      .map((p) => p.payment_date)
+      .sort()
+      .reverse()[0];
+    const balance = owedGross - paid;
+    const daysSince = lastPayment
+      ? Math.floor((Date.now() - new Date(lastPayment).getTime()) / 86400000)
+      : 999;
+    return {
+      company: bar,
+      owedGross,
+      paid,
+      balance,
+      lastPayment,
+      overdueDays: balance > 0 ? Math.max(0, daysSince - OVERDUE_DAYS) : 0,
+    };
+  });
+}
+
+export function eur(n: number): string {
+  return new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(n || 0);
+}
