@@ -113,6 +113,7 @@ export type AppRole = "owner" | "staff";
 
 export interface Staff {
   id: string;
+  company_id: string | null;
   name: string;
   nif: string | null;
   role: string;
@@ -125,6 +126,7 @@ export interface Staff {
 export interface PayrollRecord {
   id: string;
   staff_id: string | null;
+  company_id: string | null;
   month: number;
   year: number;
   base_pay: number;
