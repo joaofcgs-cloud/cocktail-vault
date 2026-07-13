@@ -1081,7 +1081,6 @@ function PricesTab({
     for (const r of rels) {
       await db.from("company_relationships").update({ markup_percent: recommended }).eq("id", r.id);
     }
-    setSaving(true);
     await db.from("business_events").insert({
       company_id: companies.find((c) => c.type === "lab")?.id ?? null,
       event_type: "PRICE_CHANGE",
