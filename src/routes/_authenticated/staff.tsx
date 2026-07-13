@@ -379,37 +379,75 @@ function StaffPage() {
         ))}
       </div>
 
-      {tab === "Staff List" && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {staff.map((s) => (
-            <Card key={s.id} className="border-border bg-card p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate font-bold">{s.name}</p>
-                  <p className="text-xs text-muted-foreground">NIF {s.nif}</p>
-                </div>
-                <span
-                  className={`h-2 w-2 shrink-0 rounded-full ${s.active ? "bg-green" : "bg-muted-foreground"}`}
-                  title={s.active ? "Active" : "Inactive"}
+      {tab === "Group Staff" && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <MiniKpi label="Total headcount" value={String(staff.length)} tone="var(--teal)" />
+            <MiniKpi label="Group labour / mo" value={eur(GROUP_LABOUR_MONTHLY)} tone="var(--orange)" />
+            <MiniKpi label="% of group revenue" value={`${num(GROUP_LABOUR_PCT_DISPLAY)}%`} tone="var(--pink)" />
+            <MiniKpi label="Group revenue / mo" value={eur(GROUP_REVENUE_TOTAL)} tone="var(--foreground)" />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {staff.map((s) => (
+              <StaffCard key={s.id} s={s} company={companyById(companies, s.company_id)} />
+            ))}
+            {staff.length === 0 && (
+              <Card className="border-border bg-card p-6 text-center text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">
+                No staff yet.
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === "By Company" && (
+        <div className="space-y-4">
+          <select
+            value={selectedCompany?.id ?? ""}
+            onChange={(e) => setSelCompany(e.target.value)}
+            className="h-11 rounded-lg border border-border bg-background px-3 text-sm"
+          >
+            {bars.map((c) => (
+              <option key={c.id} value={c.id}>
+                {barShort(c)}
+              </option>
+            ))}
+          </select>
+
+          {(() => {
+            const count = companyStaff.length;
+            const totalBase = companyStaff.reduce((sum, s) => sum + s.base_salary, 0);
+            const avg = count ? totalBase / count : 0;
+            const coRevenue =
+              barShort(selectedCompany).includes("Príncipe") ? 18000
+                : barShort(selectedCompany).includes("Baixa") ? 15000 : 12000;
+            const labourPct = coRevenue ? (totalBase / coRevenue) * 100 : 0;
+            const diff = avg - groupAvgSalary;
+            return (
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <MiniKpi label="Headcount" value={String(count)} tone="var(--teal)" />
+                <MiniKpi label="Labour cost" value={eur(totalBase)} tone="var(--orange)" />
+                <MiniKpi label="Labour cost %" value={`${num(labourPct)}%`} tone={labourPct > 25 ? "var(--red)" : "var(--green)"} />
+                <MiniKpi
+                  label="Avg salary"
+                  value={eur(avg)}
+                  tone="var(--foreground)"
+                  sub={`${diff >= 0 ? "+" : ""}${eur(diff)} vs group avg`}
                 />
               </div>
-              <span
-                className={`mt-3 inline-block rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${ROLE_BADGE[s.role] ?? "bg-secondary text-muted-foreground"}`}
-              >
-                {s.role}
-              </span>
-              <div className="mt-4 flex items-end justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">Base salary</p>
-                  <p className="text-lg font-black text-teal">{eur(s.base_salary)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Hourly</p>
-                  <p className="text-sm font-semibold">{eur(s.hourly_rate)}</p>
-                </div>
-              </div>
-            </Card>
-          ))}
+            );
+          })()}
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {companyStaff.map((s) => (
+              <StaffCard key={s.id} s={s} company={selectedCompany} />
+            ))}
+            {companyStaff.length === 0 && (
+              <Card className="border-border bg-card p-6 text-center text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">
+                No staff assigned to this company.
+              </Card>
+            )}
+          </div>
         </div>
       )}
 
