@@ -563,7 +563,8 @@ export function companyById(companies: Company[], id?: string | null) {
    estimated per-ml production cost so transfer prices are meaningful (labelled "est."). */
 export const ASSUMED_PREP_COST_PER_ML = 0.018;
 export const DEFAULT_MARKUP_PERCENT = 30;
-export const OVERDUE_DAYS = 30;
+/* Inter-company invoices are due within this many days of the last activity. */
+export const OVERDUE_DAYS = 18;
 
 export interface CompanyRelationship {
   id: string;
