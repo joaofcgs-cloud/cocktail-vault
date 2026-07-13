@@ -100,6 +100,19 @@ function StaffPage() {
     [staff],
   );
 
+  const bars = companies.filter((c) => c.type !== "holding");
+  const selectedCompany =
+    companies.find((c) => c.id === selCompany) ?? bars[0];
+
+  const companyStaff = useMemo(
+    () => staff.filter((s) => s.company_id === selectedCompany?.id),
+    [staff, selectedCompany],
+  );
+  const groupAvgSalary = useMemo(
+    () => (staff.length ? staff.reduce((sum, s) => sum + s.base_salary, 0) / staff.length : 0),
+    [staff],
+  );
+
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadStaff, setUploadStaff] = useState<string>("");
   const now = new Date();
