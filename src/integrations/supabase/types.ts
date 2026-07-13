@@ -331,6 +331,116 @@ export type Database = {
           },
         ]
       }
+      invoice_allocations: {
+        Row: {
+          amount: number
+          company_id: string
+          created_at: string
+          id: string
+          invoice_id: string
+          percentage: number
+        }
+        Insert: {
+          amount?: number
+          company_id: string
+          created_at?: string
+          id?: string
+          invoice_id: string
+          percentage?: number
+        }
+        Update: {
+          amount?: number
+          company_id?: string
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          percentage?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_allocations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_allocations_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          created_by: string | null
+          delivery_address: string | null
+          id: string
+          invoice_date: string | null
+          is_inter_company: boolean
+          is_split: boolean
+          items: Json
+          receipt_url: string | null
+          routing_confidence: number
+          routing_reason: string | null
+          status: string
+          supplier: string | null
+          total: number
+          updated_at: string
+          vendor: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          delivery_address?: string | null
+          id?: string
+          invoice_date?: string | null
+          is_inter_company?: boolean
+          is_split?: boolean
+          items?: Json
+          receipt_url?: string | null
+          routing_confidence?: number
+          routing_reason?: string | null
+          status?: string
+          supplier?: string | null
+          total?: number
+          updated_at?: string
+          vendor: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          delivery_address?: string | null
+          id?: string
+          invoice_date?: string | null
+          is_inter_company?: boolean
+          is_split?: boolean
+          items?: Json
+          receipt_url?: string | null
+          routing_confidence?: number
+          routing_reason?: string | null
+          status?: string
+          supplier?: string | null
+          total?: number
+          updated_at?: string
+          vendor?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
