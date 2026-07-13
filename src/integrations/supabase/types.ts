@@ -17,155 +17,124 @@ export type Database = {
       audit_logs: {
         Row: {
           action: string
-          admin_email: string | null
-          admin_id: string | null
+          actor_id: string | null
           created_at: string
-          detail: string | null
+          details: Json
           id: string
-          status: string
-          target_email: string | null
           target_id: string | null
+          target_type: string | null
         }
         Insert: {
           action: string
-          admin_email?: string | null
-          admin_id?: string | null
+          actor_id?: string | null
           created_at?: string
-          detail?: string | null
+          details?: Json
           id?: string
-          status?: string
-          target_email?: string | null
           target_id?: string | null
+          target_type?: string | null
         }
         Update: {
           action?: string
-          admin_email?: string | null
-          admin_id?: string | null
+          actor_id?: string | null
           created_at?: string
-          detail?: string | null
+          details?: Json
           id?: string
-          status?: string
-          target_email?: string | null
           target_id?: string | null
+          target_type?: string | null
         }
         Relationships: []
       }
-      batch_ingredients: {
+      business_events: {
         Row: {
-          amount_ml: number
-          batch_id: string
-          checked: boolean
+          actor_id: string | null
+          company_id: string | null
           created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          event_type: Database["public"]["Enums"]["business_event_type"]
           id: string
-          inventory_id: string | null
+          payload: Json
         }
         Insert: {
-          amount_ml?: number
-          batch_id: string
-          checked?: boolean
+          actor_id?: string | null
+          company_id?: string | null
           created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: Database["public"]["Enums"]["business_event_type"]
           id?: string
-          inventory_id?: string | null
+          payload?: Json
         }
         Update: {
-          amount_ml?: number
-          batch_id?: string
-          checked?: boolean
+          actor_id?: string | null
+          company_id?: string | null
           created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: Database["public"]["Enums"]["business_event_type"]
           id?: string
-          inventory_id?: string | null
+          payload?: Json
         }
         Relationships: [
           {
-            foreignKeyName: "batch_ingredients_batch_id_fkey"
-            columns: ["batch_id"]
+            foreignKeyName: "business_events_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "batch_recipes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "batch_ingredients_inventory_id_fkey"
-            columns: ["inventory_id"]
-            isOneToOne: false
-            referencedRelation: "inventory"
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
       }
-      batch_recipes: {
+      cocktail_specs: {
         Row: {
-          cost_per_serving: number
-          created_at: string
-          created_by: string | null
-          id: string
-          instructions: string | null
-          name: string
-          total_cost: number
-          total_servings: number
-        }
-        Insert: {
-          cost_per_serving?: number
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          instructions?: string | null
-          name: string
-          total_cost?: number
-          total_servings?: number
-        }
-        Update: {
-          cost_per_serving?: number
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          instructions?: string | null
-          name?: string
-          total_cost?: number
-          total_servings?: number
-        }
-        Relationships: []
-      }
-      cocktail_ingredients: {
-        Row: {
-          amount_ml: number
+          amount: number
+          amount_unit: string
           cocktail_id: string
-          cost_per_ingredient: number
+          cost: number
           created_at: string
           id: string
-          inventory_id: string | null
-          is_prep: boolean
+          ingredient_name: string
+          prep_recipe_id: string | null
+          product_id: string | null
+          sort_order: number
         }
         Insert: {
-          amount_ml?: number
+          amount?: number
+          amount_unit?: string
           cocktail_id: string
-          cost_per_ingredient?: number
+          cost?: number
           created_at?: string
           id?: string
-          inventory_id?: string | null
-          is_prep?: boolean
+          ingredient_name: string
+          prep_recipe_id?: string | null
+          product_id?: string | null
+          sort_order?: number
         }
         Update: {
-          amount_ml?: number
+          amount?: number
+          amount_unit?: string
           cocktail_id?: string
-          cost_per_ingredient?: number
+          cost?: number
           created_at?: string
           id?: string
-          inventory_id?: string | null
-          is_prep?: boolean
+          ingredient_name?: string
+          prep_recipe_id?: string | null
+          product_id?: string | null
+          sort_order?: number
         }
         Relationships: [
           {
-            foreignKeyName: "cocktail_ingredients_cocktail_id_fkey"
+            foreignKeyName: "cocktail_specs_cocktail_id_fkey"
             columns: ["cocktail_id"]
             isOneToOne: false
             referencedRelation: "cocktails"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "cocktail_ingredients_inventory_id_fkey"
-            columns: ["inventory_id"]
+            foreignKeyName: "cocktail_specs_product_id_fkey"
+            columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "inventory"
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -174,44 +143,147 @@ export type Database = {
         Row: {
           abv_percent: number
           category: string | null
+          company_id: string | null
           created_at: string
           est_cost: number
           id: string
+          kind: string
           margin_percent: number
           name: string
-          price: number
+          price: number | null
           specs: string | null
           total_volume_ml: number
+          updated_at: string
         }
         Insert: {
           abv_percent?: number
           category?: string | null
+          company_id?: string | null
           created_at?: string
           est_cost?: number
           id?: string
+          kind?: string
           margin_percent?: number
           name: string
-          price?: number
+          price?: number | null
           specs?: string | null
           total_volume_ml?: number
+          updated_at?: string
         }
         Update: {
           abv_percent?: number
           category?: string | null
+          company_id?: string | null
           created_at?: string
           est_cost?: number
           id?: string
+          kind?: string
           margin_percent?: number
           name?: string
-          price?: number
+          price?: number | null
           specs?: string | null
           total_volume_ml?: number
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "cocktails_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companies: {
+        Row: {
+          active: boolean
+          address: string | null
+          brand_color: string
+          commercial_name: string
+          created_at: string
+          id: string
+          legal_name: string
+          logo_url: string | null
+          monthly_revenue_target: number
+          nif: string
+          parent_company_id: string | null
+          type: Database["public"]["Enums"]["company_type"]
+        }
+        Insert: {
+          active?: boolean
+          address?: string | null
+          brand_color?: string
+          commercial_name: string
+          created_at?: string
+          id?: string
+          legal_name: string
+          logo_url?: string | null
+          monthly_revenue_target?: number
+          nif: string
+          parent_company_id?: string | null
+          type: Database["public"]["Enums"]["company_type"]
+        }
+        Update: {
+          active?: boolean
+          address?: string | null
+          brand_color?: string
+          commercial_name?: string
+          created_at?: string
+          id?: string
+          legal_name?: string
+          logo_url?: string | null
+          monthly_revenue_target?: number
+          nif?: string
+          parent_company_id?: string | null
+          type?: Database["public"]["Enums"]["company_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "companies_parent_company_id_fkey"
+            columns: ["parent_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cost_targets: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          id: string
+          metric: string
+          target_percent: number
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          metric: string
+          target_percent: number
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          metric?: string
+          target_percent?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_targets_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       daily_sales: {
         Row: {
           cocktail_id: string | null
+          company_id: string | null
           cost: number
           created_at: string
           date: string
@@ -222,6 +294,7 @@ export type Database = {
         }
         Insert: {
           cocktail_id?: string | null
+          company_id?: string | null
           cost?: number
           created_at?: string
           date?: string
@@ -232,6 +305,7 @@ export type Database = {
         }
         Update: {
           cocktail_id?: string | null
+          company_id?: string | null
           cost?: number
           created_at?: string
           date?: string
@@ -248,236 +322,55 @@ export type Database = {
             referencedRelation: "cocktails"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      food_inventory: {
-        Row: {
-          category: string
-          cost_per_gram: number
-          cost_per_unit: number
-          created_at: string
-          current_stock: number
-          expiry_date: string | null
-          id: string
-          last_invoice_id: string | null
-          last_purchase_date: string | null
-          name: string
-          par_level: number
-          shelf_life_days: number | null
-          status: string
-          supplier_id: string | null
-          unit_cost: number
-          unit_type: string
-          updated_at: string
-        }
-        Insert: {
-          category?: string
-          cost_per_gram?: number
-          cost_per_unit?: number
-          created_at?: string
-          current_stock?: number
-          expiry_date?: string | null
-          id?: string
-          last_invoice_id?: string | null
-          last_purchase_date?: string | null
-          name: string
-          par_level?: number
-          shelf_life_days?: number | null
-          status?: string
-          supplier_id?: string | null
-          unit_cost?: number
-          unit_type?: string
-          updated_at?: string
-        }
-        Update: {
-          category?: string
-          cost_per_gram?: number
-          cost_per_unit?: number
-          created_at?: string
-          current_stock?: number
-          expiry_date?: string | null
-          id?: string
-          last_invoice_id?: string | null
-          last_purchase_date?: string | null
-          name?: string
-          par_level?: number
-          shelf_life_days?: number | null
-          status?: string
-          supplier_id?: string | null
-          unit_cost?: number
-          unit_type?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      inventory: {
-        Row: {
-          abv: number
-          bottle_size_ml: number
-          category: string
-          cost_per_ml: number
-          created_at: string
-          current_stock: number
-          id: string
-          name: string
-          par_level: number
-          pours_per_bottle: number
-          status: string
-          unit_cost: number
-        }
-        Insert: {
-          abv?: number
-          bottle_size_ml?: number
-          category: string
-          cost_per_ml?: number
-          created_at?: string
-          current_stock?: number
-          id?: string
-          name: string
-          par_level?: number
-          pours_per_bottle?: number
-          status?: string
-          unit_cost?: number
-        }
-        Update: {
-          abv?: number
-          bottle_size_ml?: number
-          category?: string
-          cost_per_ml?: number
-          created_at?: string
-          current_stock?: number
-          id?: string
-          name?: string
-          par_level?: number
-          pours_per_bottle?: number
-          status?: string
-          unit_cost?: number
-        }
-        Relationships: []
-      }
-      invoices: {
-        Row: {
-          category: string | null
-          created_at: string
-          created_by: string | null
-          date: string | null
-          id: string
-          items: string | null
-          receipt_url: string | null
-          subcategory: string | null
-          total: number
-          vendor: string
-        }
-        Insert: {
-          category?: string | null
-          created_at?: string
-          created_by?: string | null
-          date?: string | null
-          id?: string
-          items?: string | null
-          receipt_url?: string | null
-          subcategory?: string | null
-          total?: number
-          vendor: string
-        }
-        Update: {
-          category?: string | null
-          created_at?: string
-          created_by?: string | null
-          date?: string | null
-          id?: string
-          items?: string | null
-          receipt_url?: string | null
-          subcategory?: string | null
-          total?: number
-          vendor?: string
-        }
-        Relationships: []
-      }
-      notifications: {
-        Row: {
-          created_at: string
-          id: string
-          invoice_id: string | null
-          message: string
-          read: boolean
-          status: string
-          title: string
-          type: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          invoice_id?: string | null
-          message: string
-          read?: boolean
-          status?: string
-          title: string
-          type?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          invoice_id?: string | null
-          message?: string
-          read?: boolean
-          status?: string
-          title?: string
-          type?: string
-          user_id?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "notifications_invoice_id_fkey"
-            columns: ["invoice_id"]
+            foreignKeyName: "daily_sales_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "invoices"
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
       }
-      payroll_invoices: {
+      notifications: {
         Row: {
+          body: string | null
+          company_id: string | null
           created_at: string
-          file_name: string
-          file_path: string
           id: string
-          month: number
-          net_amount: number
-          staff_id: string | null
-          uploaded_by: string | null
-          year: number
+          link: string | null
+          read: boolean
+          severity: string
+          title: string
+          user_id: string | null
         }
         Insert: {
+          body?: string | null
+          company_id?: string | null
           created_at?: string
-          file_name: string
-          file_path: string
           id?: string
-          month: number
-          net_amount?: number
-          staff_id?: string | null
-          uploaded_by?: string | null
-          year: number
+          link?: string | null
+          read?: boolean
+          severity?: string
+          title: string
+          user_id?: string | null
         }
         Update: {
+          body?: string | null
+          company_id?: string | null
           created_at?: string
-          file_name?: string
-          file_path?: string
           id?: string
-          month?: number
-          net_amount?: number
-          staff_id?: string | null
-          uploaded_by?: string | null
-          year?: number
+          link?: string | null
+          read?: boolean
+          severity?: string
+          title?: string
+          user_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "payroll_invoices_staff_id_fkey"
-            columns: ["staff_id"]
+            foreignKeyName: "notifications_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "staff"
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -485,6 +378,7 @@ export type Database = {
       payroll_records: {
         Row: {
           base_pay: number
+          company_id: string | null
           created_at: string
           days_worked: number
           gross_pay: number
@@ -501,6 +395,7 @@ export type Database = {
         }
         Insert: {
           base_pay?: number
+          company_id?: string | null
           created_at?: string
           days_worked?: number
           gross_pay?: number
@@ -517,6 +412,7 @@ export type Database = {
         }
         Update: {
           base_pay?: number
+          company_id?: string | null
           created_at?: string
           days_worked?: number
           gross_pay?: number
@@ -533,6 +429,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "payroll_records_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "payroll_records_staff_id_fkey"
             columns: ["staff_id"]
             isOneToOne: false
@@ -547,36 +450,32 @@ export type Database = {
           amount_unit: string
           cost: number
           created_at: string
-          food_inventory_id: string | null
           id: string
+          ingredient_name: string
           prep_recipe_id: string
+          product_id: string | null
         }
         Insert: {
           amount?: number
           amount_unit?: string
           cost?: number
           created_at?: string
-          food_inventory_id?: string | null
           id?: string
+          ingredient_name: string
           prep_recipe_id: string
+          product_id?: string | null
         }
         Update: {
           amount?: number
           amount_unit?: string
           cost?: number
           created_at?: string
-          food_inventory_id?: string | null
           id?: string
+          ingredient_name?: string
           prep_recipe_id?: string
+          product_id?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "prep_ingredients_food_inventory_id_fkey"
-            columns: ["food_inventory_id"]
-            isOneToOne: false
-            referencedRelation: "food_inventory"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "prep_ingredients_prep_recipe_id_fkey"
             columns: ["prep_recipe_id"]
@@ -584,11 +483,19 @@ export type Database = {
             referencedRelation: "prep_recipes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "prep_ingredients_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
         ]
       }
       prep_recipes: {
         Row: {
           category: string
+          company_id: string | null
           cost_per_ml: number
           created_at: string
           id: string
@@ -602,6 +509,7 @@ export type Database = {
         }
         Insert: {
           category?: string
+          company_id?: string | null
           cost_per_ml?: number
           created_at?: string
           id?: string
@@ -615,6 +523,7 @@ export type Database = {
         }
         Update: {
           category?: string
+          company_id?: string | null
           cost_per_ml?: number
           created_at?: string
           id?: string
@@ -626,56 +535,121 @@ export type Database = {
           yield_amount?: number
           yield_unit?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "prep_recipes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      price_history: {
+        Row: {
+          company_id: string | null
+          id: string
+          product_id: string | null
+          recorded_at: string
+          supplier: string | null
+          unit_cost: number
+        }
+        Insert: {
+          company_id?: string | null
+          id?: string
+          product_id?: string | null
+          recorded_at?: string
+          supplier?: string | null
+          unit_cost: number
+        }
+        Update: {
+          company_id?: string | null
+          id?: string
+          product_id?: string | null
+          recorded_at?: string
+          supplier?: string | null
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_history_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "price_history_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          active: boolean
+          category: string
+          created_at: string
+          default_cost: number
+          id: string
+          name: string
+          subcategory: string | null
+          unit_type: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category: string
+          created_at?: string
+          default_cost?: number
+          id?: string
+          name: string
+          subcategory?: string | null
+          unit_type?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          created_at?: string
+          default_cost?: number
+          id?: string
+          name?: string
+          subcategory?: string | null
+          unit_type?: string
+          updated_at?: string
+        }
         Relationships: []
       }
       profiles: {
         Row: {
+          active: boolean
           created_at: string
           email: string | null
           full_name: string | null
           id: string
+          last_login: string | null
+          updated_at: string
         }
         Insert: {
+          active?: boolean
           created_at?: string
           email?: string | null
           full_name?: string | null
           id: string
+          last_login?: string | null
+          updated_at?: string
         }
         Update: {
+          active?: boolean
           created_at?: string
           email?: string | null
           full_name?: string | null
           id?: string
-        }
-        Relationships: []
-      }
-      sales_uploads: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          file_name: string | null
-          id: string
-          parsed_data: Json | null
-          status: string
-          upload_date: string | null
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          file_name?: string | null
-          id?: string
-          parsed_data?: Json | null
-          status?: string
-          upload_date?: string | null
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          file_name?: string | null
-          id?: string
-          parsed_data?: Json | null
-          status?: string
-          upload_date?: string | null
+          last_login?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -729,6 +703,7 @@ export type Database = {
           amount: number
           auto_renew: boolean
           category: string
+          company_id: string | null
           created_at: string
           due_day: number
           frequency: string
@@ -741,6 +716,7 @@ export type Database = {
           amount?: number
           auto_renew?: boolean
           category?: string
+          company_id?: string | null
           created_at?: string
           due_day?: number
           frequency?: string
@@ -753,6 +729,7 @@ export type Database = {
           amount?: number
           auto_renew?: boolean
           category?: string
+          company_id?: string | null
           created_at?: string
           due_day?: number
           frequency?: string
@@ -760,12 +737,21 @@ export type Database = {
           name?: string
           vendor?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "service_costs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       staff: {
         Row: {
           active: boolean
           base_salary: number
+          company_id: string | null
           created_at: string
           hourly_rate: number
           id: string
@@ -776,6 +762,7 @@ export type Database = {
         Insert: {
           active?: boolean
           base_salary?: number
+          company_id?: string | null
           created_at?: string
           hourly_rate?: number
           id?: string
@@ -786,6 +773,7 @@ export type Database = {
         Update: {
           active?: boolean
           base_salary?: number
+          company_id?: string | null
           created_at?: string
           hourly_rate?: number
           id?: string
@@ -793,7 +781,47 @@ export type Database = {
           nif?: string | null
           role?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "staff_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_company_assignments: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_company_assignments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -813,38 +841,52 @@ export type Database = {
         }
         Relationships: []
       }
-      vendor_categories: {
+      variance_reports: {
         Row: {
-          category: string
+          actual: number
+          company_id: string | null
           created_at: string
-          hits: number
+          expected: number
           id: string
-          subcategory: string | null
-          updated_at: string
-          vendor: string
-          vendor_key: string
+          metric: string
+          notes: string | null
+          period_end: string | null
+          period_start: string | null
+          variance: number
         }
         Insert: {
-          category: string
+          actual?: number
+          company_id?: string | null
           created_at?: string
-          hits?: number
+          expected?: number
           id?: string
-          subcategory?: string | null
-          updated_at?: string
-          vendor: string
-          vendor_key: string
+          metric: string
+          notes?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          variance?: number
         }
         Update: {
-          category?: string
+          actual?: number
+          company_id?: string | null
           created_at?: string
-          hits?: number
+          expected?: number
           id?: string
-          subcategory?: string | null
-          updated_at?: string
-          vendor?: string
-          vendor_key?: string
+          metric?: string
+          notes?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          variance?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "variance_reports_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -861,7 +903,30 @@ export type Database = {
       is_owner: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "owner" | "staff"
+      app_role: "owner" | "bar_manager" | "lab_manager" | "staff"
+      business_event_type:
+        | "PRICE_CHANGE"
+        | "STOCK_ADJUSTED"
+        | "INVOICE_UPLOADED"
+        | "COCKTAIL_SOLD"
+        | "WASTE_RECORDED"
+        | "SUPPLIER_CHANGED"
+        | "NEW_PRODUCT_CREATED"
+        | "MARGIN_DROP"
+        | "TARGET_BREACH"
+        | "STOCK_OUT"
+        | "EXPIRY_WARNING"
+        | "PAYMENT_RECORDED"
+        | "PREP_BATCH_STARTED"
+        | "PREP_BATCH_COMPLETED"
+        | "PREP_BATCH_DISCARDED"
+        | "VARIANCE_DETECTED"
+        | "AI_INSIGHT_GENERATED"
+        | "MEMORY_CREATED"
+        | "INTER_COMPANY_SALE"
+        | "INTER_COMPANY_DELIVERY"
+        | "COST_ALLOCATED"
+      company_type: "holding" | "lab" | "bar" | "shared_service"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -989,7 +1054,31 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["owner", "staff"],
+      app_role: ["owner", "bar_manager", "lab_manager", "staff"],
+      business_event_type: [
+        "PRICE_CHANGE",
+        "STOCK_ADJUSTED",
+        "INVOICE_UPLOADED",
+        "COCKTAIL_SOLD",
+        "WASTE_RECORDED",
+        "SUPPLIER_CHANGED",
+        "NEW_PRODUCT_CREATED",
+        "MARGIN_DROP",
+        "TARGET_BREACH",
+        "STOCK_OUT",
+        "EXPIRY_WARNING",
+        "PAYMENT_RECORDED",
+        "PREP_BATCH_STARTED",
+        "PREP_BATCH_COMPLETED",
+        "PREP_BATCH_DISCARDED",
+        "VARIANCE_DETECTED",
+        "AI_INSIGHT_GENERATED",
+        "MEMORY_CREATED",
+        "INTER_COMPANY_SALE",
+        "INTER_COMPANY_DELIVERY",
+        "COST_ALLOCATED",
+      ],
+      company_type: ["holding", "lab", "bar", "shared_service"],
     },
   },
 } as const

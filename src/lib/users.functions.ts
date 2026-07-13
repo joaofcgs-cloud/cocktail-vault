@@ -4,11 +4,13 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export type ManagedUserStatus = "active" | "disabled" | "pending";
 
+export type AppRole = "owner" | "bar_manager" | "lab_manager" | "staff";
+
 export interface ManagedUser {
   id: string;
   email: string;
   full_name: string;
-  role: "owner" | "staff";
+  role: AppRole;
   status: ManagedUserStatus;
   last_login: string | null;
   created_at: string;
@@ -64,7 +66,7 @@ export const listManagedUsers = createServerFn({ method: "GET" })
     const profileMap = new Map(
       (profiles ?? []).map((p) => [p.id, p]),
     );
-    const roleMap = new Map<string, "owner" | "staff">();
+    const roleMap = new Map<string, AppRole>();
     for (const r of roles ?? []) {
       const existing = roleMap.get(r.user_id);
       if (r.role === "owner" || !existing) roleMap.set(r.user_id, r.role);
