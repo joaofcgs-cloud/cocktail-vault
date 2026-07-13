@@ -9,8 +9,18 @@ import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { eur, num } from "@/lib/format";
-import { Download, Lock, Upload, FileText, Trash2, ExternalLink, Sparkles } from "lucide-react";
+import { Download, Lock, Upload, FileText, Trash2, ExternalLink, Sparkles, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import {
+  useCompanies,
+  companyById,
+  barShort,
+  STAFF_MOVEMENTS,
+  GROUP_LABOUR_MONTHLY,
+  GROUP_LABOUR_PCT_DISPLAY,
+  GROUP_REVENUE_TOTAL,
+  type Company,
+} from "@/lib/group";
 
 export const Route = createFileRoute("/_authenticated/staff")({
   head: () => ({ meta: [{ title: "Staff & Payroll — Bar Command Center" }] }),
@@ -25,8 +35,21 @@ const ROLE_BADGE: Record<string, string> = {
   "Trabalhador de limpeza": "bg-secondary text-muted-foreground",
 };
 
-const TABS = ["Staff List", "Payroll", "Monthly Costs", "Tips", "Salary Invoices"] as const;
+const TABS = ["Group Staff", "By Company", "Payroll", "Monthly Costs", "Tips", "Events"] as const;
 type Tab = (typeof TABS)[number];
+
+const BAR_KEY_COLOR: Record<string, string> = {
+  PR: "var(--teal)",
+  Baixa: "var(--orange)",
+  Lab: "var(--pink)",
+};
+function companyBadgeColor(c?: Company): string {
+  if (!c) return "var(--muted-foreground)";
+  return c.brand_color || "var(--muted-foreground)";
+}
+function moveShort(k: "PR" | "Baixa" | "Lab"): string {
+  return k === "PR" ? "Príncipe Real" : k === "Baixa" ? "Baixa" : "Lab";
+}
 
 function StaffPage() {
   const { isOwner, user } = useAuth();
